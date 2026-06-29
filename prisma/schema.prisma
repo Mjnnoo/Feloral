@@ -56,9 +56,29 @@ enum PriceInsightLevel {
   high
 }
 
+model User {
+  id       Int     @id @default(autoincrement())
+  fullName String?
+  mobile   String  @unique
+  email    String?
+  password String
+  role     String  @default("customer")
+  isActive Boolean @default(true)
+
+  cart      Cart?
+  orders    Order[]
+  addresses Address[]
+
+  beautyProfile BeautyProfile?
+  tryOnSessions VirtualTryOnSession[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Brand {
   id       Int     @id @default(autoincrement())
-  name     String  @unique
+  name     String
   slug     String  @unique
   logo     String?
   isActive Boolean @default(true)
@@ -84,27 +104,27 @@ model Category {
 }
 
 model Product {
-  id Int @id @default(autoincrement())
-
+  id          Int     @id @default(autoincrement())
   name        String
   englishName String?
   slug        String  @unique
-
   description String?
   shortDesc   String?
+  isActive    Boolean @default(true)
 
-  isActive Boolean @default(true)
+  brandId    Int?
+  categoryId Int?
 
-  brandId    Int
-  categoryId Int
-
-  brand    Brand    @relation(fields: [brandId], references: [id])
-  category Category @relation(fields: [categoryId], references: [id])
+  brand    Brand?    @relation(fields: [brandId], references: [id])
+  category Category? @relation(fields: [categoryId], references: [id])
 
   variants ProductVariant[]
   images   ProductImage[]
-  shades   ProductShade[]
 
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  shades       ProductShade[]
   intelligence ProductIntelligence?
   experience   ProductExperience?
 
@@ -118,35 +138,30 @@ model Product {
 }
 
 model ProductVariant {
-  id Int @id @default(autoincrement())
-
-  title String
-  sku   String @unique
-
-  volume  Int?
-  barcode String? @unique
-
-  price     Decimal  @db.Decimal(12, 2)
-  salePrice Decimal? @db.Decimal(12, 2)
-
-  stock    Int     @default(0)
-  isActive Boolean @default(true)
+  id        Int      @id @default(autoincrement())
+  title     String
+  sku       String   @unique
+  volume    Int?
+  barcode   String?
+  price     Decimal  @db.Decimal(18, 2)
+  salePrice Decimal? @db.Decimal(18, 2)
+  stock     Int      @default(0)
+  isActive  Boolean  @default(true)
 
   productId Int
-  product   Product @relation(fields: [productId], references: [id])
-
-  shade ProductShade?
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   cartItems  CartItem[]
   orderItems OrderItem[]
+
+  shade ProductShade?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model ProductImage {
-  id Int @id @default(autoincrement())
-
+  id        Int     @id @default(autoincrement())
   imageUrl  String
   alt       String?
   isPrimary Boolean @default(false)
@@ -158,41 +173,134 @@ model ProductImage {
   createdAt DateTime @default(now())
 }
 
+model Cart {
+  id     Int @id @default(autoincrement())
+  userId Int @unique
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CartItem {
+  id        Int  @id @default(autoincrement())
+  cartId    Int
+  productId Int?
+  variantId Int
+  quantity  Int  @default(1)
+
+  cart    Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product?       @relation(fields: [productId], references: [id])
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cartId, variantId])
+}
+
+model Address {
+  id             Int     @id @default(autoincrement())
+  userId         Int
+  title          String?
+  receiverName   String
+  receiverMobile String
+  province       String
+  city           String
+  addressLine    String
+  postalCode     String?
+  plaque         String?
+  unit           String?
+  isDefault      Boolean @default(false)
+  isActive       Boolean @default(true)
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Order {
+  id     Int @id @default(autoincrement())
+  userId Int
+
+  user User @relation(fields: [userId], references: [id])
+
+  addressId Int?
+  address   Address? @relation(fields: [addressId], references: [id])
+
+  status OrderStatus @default(pending)
+  total  Decimal     @default(0) @db.Decimal(18, 2)
+
+  authority String?
+
+  shippingReceiverName   String?
+  shippingReceiverMobile String?
+  shippingProvince       String?
+  shippingCity           String?
+  shippingAddressLine    String?
+  shippingPostalCode     String?
+  shippingPlaque         String?
+  shippingUnit           String?
+
+  items OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OrderItem {
+  id Int @id @default(autoincrement())
+
+  orderId   Int
+  productId Int?
+  variantId Int
+
+  productName  String  @default("")
+  variantTitle String?
+  sku          String?
+  price        Decimal @db.Decimal(18, 2)
+  quantity     Int
+  total        Decimal @default(0) @db.Decimal(18, 2)
+
+  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product?       @relation(fields: [productId], references: [id])
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
 model ProductShade {
   id Int @id @default(autoincrement())
 
   productId Int
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId Int? @unique
 
-  variantId Int?            @unique
-  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
-
-  name     String
-  code     String?
-  hexColor String
-
-  region  ProductRegionType
-  finish  ProductShadeFinish?
-  opacity Float               @default(1.0)
-
+  name         String
+  code         String?
+  hexColor     String?
+  region       ProductRegionType
+  finish       ProductShadeFinish?
+  opacity      Float?
   previewImage String?
-  sortOrder    Int     @default(0)
-  isActive     Boolean @default(true)
+  sortOrder    Int                 @default(0)
+  isActive     Boolean             @default(true)
+
+  product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant ProductVariant? @relation(fields: [variantId], references: [id])
 
   tryOnSessions VirtualTryOnSession[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  @@index([productId])
-  @@index([region])
 }
 
 model ProductIntelligence {
-  id Int @id @default(autoincrement())
-
-  productId Int     @unique
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  id        Int @id @default(autoincrement())
+  productId Int @unique
 
   aiGeneratedTitle       String?
   aiGeneratedShortDesc   String?
@@ -214,15 +322,15 @@ model ProductIntelligence {
 
   complementaryProductIds Int[]
 
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model ProductExperience {
-  id Int @id @default(autoincrement())
-
-  productId Int     @unique
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  id        Int @id @default(autoincrement())
+  productId Int @unique
 
   visualTheme  String?
   mood         String?
@@ -238,9 +346,10 @@ model ProductExperience {
   middleNotes String[]
   baseNotes   String[]
 
-  season    String[]
-  occasion  String[]
-  gender    String?
+  season   String[]
+  occasion String[]
+  gender   String?
+
   longevity String?
   sillage   String?
 
@@ -248,206 +357,28 @@ model ProductExperience {
   routineStep String?
   texture     String?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Cart {
-  id Int @id @default(autoincrement())
-
-  userId Int  @unique
-  user   User @relation(fields: [userId], references: [id])
-
-  items CartItem[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model CartItem {
-  id Int @id @default(autoincrement())
-
-  cartId Int
-  cart   Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
-
-  variantId Int
-  variant   ProductVariant @relation(fields: [variantId], references: [id])
-
-  quantity Int @default(1)
-
-  createdAt DateTime @default(now())
-
-  @@unique([cartId, variantId])
-}
-
-model Address {
-  id Int @id @default(autoincrement())
-
-  userId Int
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  title          String?
-  receiverName   String
-  receiverMobile String
-
-  province    String
-  city        String
-  addressLine String
-  postalCode  String
-
-  plaque String?
-  unit   String?
-
-  isDefault Boolean @default(false)
-  isActive  Boolean @default(true)
-
-  orders Order[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Order {
-  id Int @id @default(autoincrement())
-
-  userId Int
-  user   User @relation(fields: [userId], references: [id])
-
-  addressId Int?
-  address   Address? @relation(fields: [addressId], references: [id])
-
-  total     Decimal     @db.Decimal(12, 2)
-  status    OrderStatus @default(pending)
-  authority String?
-
-  shippingReceiverName   String?
-  shippingReceiverMobile String?
-  shippingProvince       String?
-  shippingCity           String?
-  shippingAddressLine    String?
-  shippingPostalCode     String?
-  shippingPlaque         String?
-  shippingUnit           String?
-
-  items OrderItem[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  @@index([userId])
-  @@index([status])
-  @@index([createdAt])
-}
-
-model OrderItem {
-  id Int @id @default(autoincrement())
-
-  orderId Int
-  order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  variantId Int
-  variant   ProductVariant @relation(fields: [variantId], references: [id])
-
-  quantity Int
-  price    Decimal @db.Decimal(12, 2)
-
-  createdAt DateTime @default(now())
-}
-
-model Competitor {
-  id Int @id @default(autoincrement())
-
-  name       String
-  slug       String  @unique
-  websiteUrl String?
-  isActive   Boolean @default(true)
-
-  productLinks CompetitorProductLink[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model CompetitorProductLink {
-  id Int @id @default(autoincrement())
-
-  productId Int
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  competitorId Int
-  competitor   Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
-
-  url         String
-  title       String?
-  externalSku String?
-  isActive    Boolean @default(true)
-
-  snapshots PriceSnapshot[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([competitorId, url])
-  @@index([productId])
-  @@index([competitorId])
-}
-
-model PriceSnapshot {
-  id Int @id @default(autoincrement())
-
-  competitorProductLinkId Int
-  competitorProductLink   CompetitorProductLink @relation(fields: [competitorProductLinkId], references: [id], onDelete: Cascade)
-
-  price     Decimal  @db.Decimal(12, 2)
-  salePrice Decimal? @db.Decimal(12, 2)
-
-  currency    String              @default("IRR")
-  isAvailable Boolean             @default(true)
-  source      PriceSnapshotSource @default(manual)
-
-  capturedAt DateTime @default(now())
-
-  @@index([competitorProductLinkId])
-  @@index([capturedAt])
-}
-
-model ProductPriceInsight {
-  id Int @id @default(autoincrement())
-
-  productId Int     @unique
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  feloralPrice   Decimal? @db.Decimal(12, 2)
-  minMarketPrice Decimal? @db.Decimal(12, 2)
-  avgMarketPrice Decimal? @db.Decimal(12, 2)
-  maxMarketPrice Decimal? @db.Decimal(12, 2)
-  suggestedPrice Decimal? @db.Decimal(12, 2)
-
-  insightLevel      PriceInsightLevel @default(unknown)
-  summary           String?
-  recommendedAction String?
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model BeautyProfile {
-  id Int @id @default(autoincrement())
+  id     Int @id @default(autoincrement())
+  userId Int @unique
 
-  userId Int  @unique
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   skinType  String?
   undertone String?
 
-  scentFamilies String[]
-  favoriteNotes String[]
-  allergies     String[]
-
+  scentFamilies   String[]
+  favoriteNotes   String[]
+  allergies       String[]
   preferredBrands String[]
 
-  budgetMin Decimal? @db.Decimal(12, 2)
-  budgetMax Decimal? @db.Decimal(12, 2)
+  budgetMin Decimal? @db.Decimal(18, 2)
+  budgetMax Decimal? @db.Decimal(18, 2)
 
   beautyGoals String[]
 
@@ -456,16 +387,11 @@ model BeautyProfile {
 }
 
 model VirtualTryOnSession {
-  id Int @id @default(autoincrement())
-
-  userId Int?
-  user   User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id     Int @id @default(autoincrement())
+  userId Int
 
   productId Int
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  shadeId Int?
-  shade   ProductShade? @relation(fields: [shadeId], references: [id], onDelete: SetNull)
+  shadeId   Int?
 
   region ProductRegionType?
 
@@ -477,32 +403,86 @@ model VirtualTryOnSession {
 
   consentAccepted Boolean @default(false)
 
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  shade   ProductShade? @relation(fields: [shadeId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  @@index([userId])
-  @@index([productId])
-  @@index([shadeId])
 }
 
-model User {
-  id Int @id @default(autoincrement())
+model Competitor {
+  id         Int     @id @default(autoincrement())
+  name       String
+  slug       String  @unique
+  websiteUrl String?
 
-  fullName String
-  mobile   String  @unique
-  email    String?
-  password String?
+  priceSelector        String?
+  salePriceSelector    String?
+  titleSelector        String?
+  availabilitySelector String?
+  priceMultiplier      Float   @default(1)
 
-  role     String  @default("customer")
   isActive Boolean @default(true)
 
-  cart      Cart?
-  orders    Order[]
-  addresses Address[]
+  productLinks CompetitorProductLink[]
 
-  beautyProfile BeautyProfile?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
 
-  tryOnSessions VirtualTryOnSession[]
+model CompetitorProductLink {
+  id Int @id @default(autoincrement())
+
+  productId    Int
+  competitorId Int
+
+  url         String
+  title       String?
+  externalSku String?
+  isActive    Boolean @default(true)
+
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  competitor Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  snapshots PriceSnapshot[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PriceSnapshot {
+  id Int @id @default(autoincrement())
+
+  competitorProductLinkId Int
+  competitorProductLink   CompetitorProductLink @relation(fields: [competitorProductLinkId], references: [id], onDelete: Cascade)
+
+  price     Decimal  @db.Decimal(18, 2)
+  salePrice Decimal? @db.Decimal(18, 2)
+  currency  String   @default("IRR")
+
+  isAvailable Boolean             @default(true)
+  source      PriceSnapshotSource @default(manual)
+
+  capturedAt DateTime @default(now())
+}
+
+model ProductPriceInsight {
+  id        Int @id @default(autoincrement())
+  productId Int @unique
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  feloralPrice   Decimal  @db.Decimal(18, 2)
+  minMarketPrice Decimal? @db.Decimal(18, 2)
+  avgMarketPrice Decimal? @db.Decimal(18, 2)
+  maxMarketPrice Decimal? @db.Decimal(18, 2)
+  suggestedPrice Decimal? @db.Decimal(18, 2)
+
+  insightLevel PriceInsightLevel @default(unknown)
+
+  summary           String?
+  recommendedAction String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

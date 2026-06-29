@@ -27,3 +27,10 @@ api/node_modules/.prisma/
 .DS_Store
 Thumbs.db
 .vscode/
+# Local environment files
+.env
+.env.*
+
+# Runtime uploads and crawler debug files
+uploads/
+debug-crawler/

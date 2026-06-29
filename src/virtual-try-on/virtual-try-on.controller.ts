@@ -15,13 +15,13 @@ import {
 
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-
 import { extname } from 'path';
 
 import { VirtualTryOnService } from './virtual-try-on.service';
 
 import { CreateTryOnSessionDto } from './dto/create-try-on-session.dto';
 import { UpdateTryOnResultDto } from './dto/update-try-on-result.dto';
+import { ProcessTryOnDto } from './dto/process-try-on.dto';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -119,6 +119,20 @@ export class VirtualTryOnController {
     @Body() dto: UpdateTryOnResultDto,
   ) {
     return this.virtualTryOnService.updateMySessionResult(
+      request.user.id,
+      id,
+      dto,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('sessions/:id/process')
+  processMySession(
+    @Req() request: any,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ProcessTryOnDto,
+  ) {
+    return this.virtualTryOnService.processMySession(
       request.user.id,
       id,
       dto,

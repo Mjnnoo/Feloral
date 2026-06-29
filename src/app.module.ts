@@ -1,12 +1,11 @@
-import { VirtualTryOnModule } from './virtual-try-on/virtual-try-on.module';
-import { AiAdvisorModule } from './ai-advisor/ai-advisor.module';
-import { RecommendationsModule } from './recommendations/recommendations.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 
 import { PrismaModule } from './prisma/prisma.module';
-
 import { AuthModule } from './auth/auth.module';
+
+import { UsersModule } from './users/users.module';
 
 import { BrandsModule } from './brands/brands.module';
 import { CategoriesModule } from './categories/categories.module';
@@ -27,6 +26,11 @@ import { ProductIntelligenceModule } from './product-intelligence/product-intell
 import { ProductExperienceModule } from './product-experience/product-experience.module';
 
 import { BeautyProfileModule } from './beauty-profile/beauty-profile.module';
+import { RecommendationsModule } from './recommendations/recommendations.module';
+import { AiAdvisorModule } from './ai-advisor/ai-advisor.module';
+import { VirtualTryOnModule } from './virtual-try-on/virtual-try-on.module';
+
+import { PriceIntelligenceModule } from './price-intelligence/price-intelligence.module';
 
 @Module({
   imports: [
@@ -34,9 +38,11 @@ import { BeautyProfileModule } from './beauty-profile/beauty-profile.module';
       isGlobal: true,
     }),
 
-    PrismaModule,
+    ScheduleModule.forRoot(),
 
+    PrismaModule,
     AuthModule,
+    UsersModule,
 
     BrandsModule,
     CategoriesModule,
@@ -60,7 +66,8 @@ import { BeautyProfileModule } from './beauty-profile/beauty-profile.module';
     RecommendationsModule,
     AiAdvisorModule,
     VirtualTryOnModule,
-  ],
 
+    PriceIntelligenceModule,
+  ],
 })
 export class AppModule {}

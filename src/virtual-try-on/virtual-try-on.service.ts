@@ -14,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 import { CreateTryOnSessionDto } from './dto/create-try-on-session.dto';
 import { UpdateTryOnResultDto } from './dto/update-try-on-result.dto';
+import { ProcessTryOnDto } from './dto/process-try-on.dto';
 
 @Injectable()
 export class VirtualTryOnService {
@@ -154,6 +155,54 @@ export class VirtualTryOnService {
       },
       include: this.sessionInclude(),
     });
+  }
+
+  async processMySession(
+    userId: number,
+    id: number,
+    data: ProcessTryOnDto,
+  ) {
+    const session = await this.getMySessionById(userId, id);
+
+    if (!session.consentAccepted) {
+      throw new BadRequestException(
+        'User consent is required for virtual try-on processing',
+      );
+    }
+
+    if (!session.sourceImageUrl) {
+      throw new BadRequestException(
+        'sourceImageUrl is required for virtual try-on processing',
+      );
+    }
+
+    const mockResultImageUrl =
+      data.resultImageUrl ??
+      `/uploads/try-on/results/session-${id}-mock-result.jpg`;
+
+    const updatedSession =
+      await this.prisma.virtualTryOnSession.update({
+        where: {
+          id,
+        },
+        data: {
+          status: TryOnStatus.completed,
+          resultImageUrl: mockResultImageUrl,
+          errorMessage: null,
+        },
+        include: this.sessionInclude(),
+      });
+
+    return {
+      engine: 'feloral_mock_try_on_engine',
+      status: 'completed',
+      message:
+        'Try-on processing simulated successfully. Later this endpoint will connect to real AI/image processing.',
+      processingNote:
+        data.processingNote ??
+        'Mock processing applied. No real image manipulation yet.',
+      session: updatedSession,
+    };
   }
 
   async deleteMySession(userId: number, id: number) {
