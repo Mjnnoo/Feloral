@@ -1,3 +1,4 @@
+import { VirtualTryOnModule } from './virtual-try-on/virtual-try-on.module';
 import { AiAdvisorModule } from './ai-advisor/ai-advisor.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
 import { Module } from '@nestjs/common';
@@ -58,6 +59,7 @@ import { BeautyProfileModule } from './beauty-profile/beauty-profile.module';
     BeautyProfileModule,
     RecommendationsModule,
     AiAdvisorModule,
+    VirtualTryOnModule,
   ],
 
 })
