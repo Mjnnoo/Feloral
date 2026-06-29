@@ -1,4 +1,6 @@
+import { AddressesModule } from './addresses/addresses.module';
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 
@@ -16,9 +18,14 @@ import { ProductImagesModule } from './product-images/product-images.module';
 import { CartModule } from './cart/cart.module';
 import { OrderModule } from './order/order.module';
 import { PaymentModule } from './payment/payment.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
+
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),
       serveRoot: '/uploads',
@@ -38,6 +45,8 @@ import { PaymentModule } from './payment/payment.module';
     CartModule,
     OrderModule,
     PaymentModule,
+    DashboardModule,
+    AddressesModule,
   ],
 })
 export class AppModule {}

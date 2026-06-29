@@ -1,17 +1,57 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductImageDto } from './dto/create-product-image.dto';
 import { UpdateProductImageDto } from './dto/update-product-image.dto';
 
 @Injectable()
 export class ProductImagesService {
+  constructor(private readonly prisma: PrismaService) {}
 
-  constructor(private prisma: PrismaService) {}
+  async create(data: CreateProductImageDto) {
+    await this.ensureProductExists(data.productId);
 
-  create(data: CreateProductImageDto) {
+    if (data.isPrimary) {
+      return this.prisma.$transaction(async (tx) => {
+        await tx.productImage.updateMany({
+          where: {
+            productId: data.productId,
+          },
+          data: {
+            isPrimary: false,
+          },
+        });
+
+        return tx.productImage.create({
+          data: {
+            imageUrl: data.imageUrl,
+            productId: data.productId,
+            alt: data.alt ?? null,
+            isPrimary: true,
+            sortOrder: data.sortOrder ?? 0,
+          },
+          include: {
+            product: true,
+          },
+        });
+      });
+    }
+
     return this.prisma.productImage.create({
-      data,
+      data: {
+        imageUrl: data.imageUrl,
+        productId: data.productId,
+        alt: data.alt ?? null,
+        isPrimary: data.isPrimary ?? false,
+        sortOrder: data.sortOrder ?? 0,
+      },
+      include: {
+        product: true,
+      },
     });
   }
 
@@ -20,31 +60,95 @@ export class ProductImagesService {
       include: {
         product: true,
       },
-      orderBy: {
-        id: 'asc',
-      },
+      orderBy: [
+        {
+          productId: 'asc',
+        },
+        {
+          sortOrder: 'asc',
+        },
+        {
+          id: 'asc',
+        },
+      ],
     });
   }
 
-  findOne(id: number) {
-    return this.prisma.productImage.findUnique({
+  async findOne(id: number) {
+    const image = await this.prisma.productImage.findUnique({
       where: { id },
+      include: {
+        product: true,
+      },
+    });
+
+    if (!image) {
+      throw new NotFoundException('Product image not found');
+    }
+
+    return image;
+  }
+
+  async update(id: number, data: UpdateProductImageDto) {
+    const currentImage = await this.findOne(id);
+
+    const finalProductId = data.productId ?? currentImage.productId;
+
+    if (data.productId) {
+      await this.ensureProductExists(data.productId);
+    }
+
+    if (data.isPrimary) {
+      return this.prisma.$transaction(async (tx) => {
+        await tx.productImage.updateMany({
+          where: {
+            productId: finalProductId,
+            id: {
+              not: id,
+            },
+          },
+          data: {
+            isPrimary: false,
+          },
+        });
+
+        return tx.productImage.update({
+          where: { id },
+          data: {
+            ...data,
+            isPrimary: true,
+          },
+          include: {
+            product: true,
+          },
+        });
+      });
+    }
+
+    return this.prisma.productImage.update({
+      where: { id },
+      data,
       include: {
         product: true,
       },
     });
   }
 
-  update(id: number, data: UpdateProductImageDto) {
-    return this.prisma.productImage.update({
-      where: { id },
-      data,
-    });
-  }
+  async remove(id: number) {
+    await this.findOne(id);
 
-  remove(id: number) {
     return this.prisma.productImage.delete({
       where: { id },
     });
+  }
+
+  private async ensureProductExists(productId: number) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+    });
+
+    if (!product) {
+      throw new BadRequestException('Product not found');
+    }
   }
 }

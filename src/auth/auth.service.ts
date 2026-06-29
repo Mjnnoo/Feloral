@@ -1,110 +1,86 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  ConflictException,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import { RegisterDto } from './dto/register.dto';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private prisma: PrismaService,
-    private jwtService: JwtService,
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
   ) {}
 
   // =========================
   // REGISTER
   // =========================
-  async register(data: {
-    fullName: string;
-    mobile: string;
-    password: string;
-    email?: string;
-  }) {
-    try {
-      if (!data.fullName || !data.mobile || !data.password) {
-        throw new Error('Missing required fields');
-      }
+  async register(data: RegisterDto) {
+    const exists = await this.prisma.user.findUnique({
+      where: { mobile: data.mobile },
+    });
 
-      const exists = await this.prisma.user.findUnique({
-        where: { mobile: data.mobile },
-      });
-
-      if (exists) {
-        throw new ConflictException('Mobile already exists');
-      }
-
-      const hashedPassword = await bcrypt.hash(data.password, 10);
-
-      const user = await this.prisma.user.create({
-        data: {
-          fullName: data.fullName,
-          mobile: data.mobile,
-          email: data.email || null,
-          password: hashedPassword,
-        },
-      });
-
-      return {
-        message: 'User created successfully',
-        user: {
-          id: user.id,
-          fullName: user.fullName,
-          mobile: user.mobile,
-          email: user.email,
-          role: user.role,
-        },
-      };
-    } catch (err) {
-      console.error('REGISTER ERROR:', err);
-      throw new InternalServerErrorException(err.message || 'Register failed');
+    if (exists) {
+      throw new ConflictException('Mobile already exists');
     }
+
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+
+    const user = await this.prisma.user.create({
+      data: {
+        fullName: data.fullName,
+        mobile: data.mobile,
+        email: data.email ?? null,
+        password: hashedPassword,
+      },
+      select: {
+        id: true,
+        fullName: true,
+        mobile: true,
+        email: true,
+        role: true,
+        createdAt: true,
+      },
+    });
+
+    return {
+      message: 'User created successfully',
+      user,
+    };
   }
 
   // =========================
   // LOGIN
   // =========================
   async login(mobile: string, password: string) {
-    try {
-      if (!mobile || !password) {
-        throw new UnauthorizedException('Mobile and password required');
-      }
+    const user = await this.prisma.user.findUnique({
+      where: { mobile },
+    });
 
-      const user = await this.prisma.user.findUnique({
-        where: { mobile },
-      });
-
-      if (!user) {
-        throw new UnauthorizedException('Invalid credentials');
-      }
-
-      const ok = await bcrypt.compare(password, user.password ?? '');
-
-      if (!ok) {
-        throw new UnauthorizedException('Invalid credentials');
-      }
-
-      const token = await this.jwtService.signAsync({
-        sub: user.id,
-        mobile: user.mobile,
-        role: user.role,
-      });
-
-      return {
-        access_token: token,
-        user: {
-          id: user.id,
-          fullName: user.fullName,
-          mobile: user.mobile,
-          role: user.role,
-        },
-      };
-    } catch (err) {
-      console.error('LOGIN ERROR:', err);
-      throw err;
+    if (!user || !user.password) {
+      throw new UnauthorizedException('Invalid credentials');
     }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const accessToken = await this.jwtService.signAsync({
+      sub: user.id,
+      mobile: user.mobile,
+      role: user.role,
+    });
+
+    return {
+      access_token: accessToken,
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        mobile: user.mobile,
+        email: user.email,
+        role: user.role,
+      },
+    };
   }
 }
