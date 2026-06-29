@@ -1,0 +1,29 @@
+# dependencies
+node_modules/
+api/node_modules/
+
+# build
+dist/
+api/dist/
+
+# env files - NEVER COMMIT
+.env
+.env.*
+api/.env
+api/.env.*
+
+# logs
+*.log
+npm-debug.log*
+
+# uploads/runtime files
+uploads/
+api/uploads/
+
+# prisma generated runtime
+api/node_modules/.prisma/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
