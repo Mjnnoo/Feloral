@@ -1,3 +1,4 @@
+import { AiAdvisorModule } from './ai-advisor/ai-advisor.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -56,6 +57,8 @@ import { BeautyProfileModule } from './beauty-profile/beauty-profile.module';
 
     BeautyProfileModule,
     RecommendationsModule,
+    AiAdvisorModule,
   ],
+
 })
 export class AppModule {}
