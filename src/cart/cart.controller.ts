@@ -32,15 +32,23 @@ export class CartController {
     return this.cartService.getCart(user.id);
   }
 
+  // مسیر قدیمی پروژه خودت
   @Post('add')
-  addToCart(
-    @User() user: AuthUser,
-    @Body() dto: AddToCartDto,
-  ) {
+  addToCartOldRoute(@User() user: AuthUser, @Body() dto: AddToCartDto) {
     return this.cartService.addToCart(
       user.id,
       dto.variantId,
-      dto.quantity,
+      dto.quantity || 1,
+    );
+  }
+
+  // مسیر استانداردتر برای فرانت‌اند
+  @Post('items')
+  addToCart(@User() user: AuthUser, @Body() dto: AddToCartDto) {
+    return this.cartService.addToCart(
+      user.id,
+      dto.variantId,
+      dto.quantity || 1,
     );
   }
 
@@ -50,11 +58,7 @@ export class CartController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateCartItemDto,
   ) {
-    return this.cartService.updateQuantity(
-      user.id,
-      id,
-      dto.quantity,
-    );
+    return this.cartService.updateQuantity(user.id, id, dto.quantity);
   }
 
   @Delete('items/:id')
