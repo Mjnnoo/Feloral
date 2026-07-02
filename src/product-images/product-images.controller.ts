@@ -33,62 +33,119 @@ const allowedImageMimeTypes = [
   'image/avif',
 ];
 
+const PersianImageIdPipe = new ParseIntPipe({
+  exceptionFactory: () => {
+    return new BadRequestException('شناسه تصویر باید عدد باشد');
+  },
+});
+
+const PersianProductIdPipe = new ParseIntPipe({
+  exceptionFactory: () => {
+    return new BadRequestException('شناسه محصول باید عدد باشد');
+  },
+});
+
+const imageUploadInterceptor = FileInterceptor('image', {
+  storage: diskStorage({
+    destination: './uploads/products',
+    filename: (req, file, callback) => {
+      const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      callback(null, unique + extname(file.originalname));
+    },
+  }),
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+  fileFilter: (req, file, callback) => {
+    if (!allowedImageMimeTypes.includes(file.mimetype)) {
+      return callback(
+        new BadRequestException(
+          'فقط فایل‌های jpeg، png، webp و avif مجاز هستند',
+        ),
+        false,
+      );
+    }
+
+    callback(null, true);
+  },
+});
+
 @Controller('product-images')
 export class ProductImagesController {
-  constructor(
-    private readonly productImagesService: ProductImagesService,
-  ) {}
+  constructor(private readonly productImagesService: ProductImagesService) {}
+
+  // مسیرهای جدید پنل ادمین
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.WAREHOUSE)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.WAREHOUSE)
+  @Post('admin/upload')
+  @UseInterceptors(imageUploadInterceptor)
+  adminUpload(@UploadedFile() file: Express.Multer.File) {
+    return this.productImagesService.handleUploadedFile(file);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.WAREHOUSE)
+  @Post('admin')
+  adminCreate(@Body() dto: CreateProductImageDto) {
+    return this.productImagesService.create(dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.WAREHOUSE, Role.SUPPORT)
+  @Get('admin/product/:productId')
+  adminFindByProduct(
+    @Param('productId', PersianProductIdPipe) productId: number,
+  ) {
+    return this.productImagesService.findByProduct(productId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.WAREHOUSE, Role.SUPPORT)
+  @Get('admin/:id')
+  adminFindOne(@Param('id', PersianImageIdPipe) id: number) {
+    return this.productImagesService.findOne(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.WAREHOUSE)
+  @Patch('admin/:id')
+  adminUpdate(
+    @Param('id', PersianImageIdPipe) id: number,
+    @Body() dto: UpdateProductImageDto,
+  ) {
+    return this.productImagesService.update(id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.WAREHOUSE)
+  @Patch('admin/:id/primary')
+  adminSetPrimary(@Param('id', PersianImageIdPipe) id: number) {
+    return this.productImagesService.setPrimary(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.WAREHOUSE)
+  @Delete('admin/:id')
+  adminRemove(@Param('id', PersianImageIdPipe) id: number) {
+    return this.productImagesService.remove(id);
+  }
+
+  // مسیرهای قبلی پروژه - برای سازگاری نگه داشته شده
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.WAREHOUSE)
   @Post()
   create(@Body() dto: CreateProductImageDto) {
     return this.productImagesService.create(dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.WAREHOUSE)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.WAREHOUSE)
   @Post('upload')
-  @UseInterceptors(
-    FileInterceptor('image', {
-      storage: diskStorage({
-        destination: './uploads/products',
-        filename: (req, file, callback) => {
-          const unique =
-            Date.now() + '-' + Math.round(Math.random() * 1e9);
-
-          callback(null, unique + extname(file.originalname));
-        },
-      }),
-      limits: {
-        fileSize: 5 * 1024 * 1024,
-      },
-      fileFilter: (req, file, callback) => {
-        if (!allowedImageMimeTypes.includes(file.mimetype)) {
-          return callback(
-            new BadRequestException(
-              'Only jpeg, png, webp and avif images are allowed',
-            ),
-            false,
-          );
-        }
-
-        callback(null, true);
-      },
-    }),
-  )
+  @UseInterceptors(imageUploadInterceptor)
   upload(@UploadedFile() file: Express.Multer.File) {
-    if (!file) {
-      throw new BadRequestException('Image file is required');
-    }
-
-    return {
-      success: true,
-      filename: file.filename,
-      imageUrl: `/uploads/products/${file.filename}`,
-      mimeType: file.mimetype,
-      size: file.size,
-    };
+    return this.productImagesService.handleUploadedFile(file);
   }
 
   @Get()
@@ -97,24 +154,24 @@ export class ProductImagesController {
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
+  findOne(@Param('id', PersianImageIdPipe) id: number) {
     return this.productImagesService.findOne(id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.WAREHOUSE)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.WAREHOUSE)
   @Patch(':id')
   update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', PersianImageIdPipe) id: number,
     @Body() dto: UpdateProductImageDto,
   ) {
     return this.productImagesService.update(id, dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.WAREHOUSE)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.WAREHOUSE)
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
+  remove(@Param('id', PersianImageIdPipe) id: number) {
     return this.productImagesService.remove(id);
   }
 }
