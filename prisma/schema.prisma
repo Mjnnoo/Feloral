@@ -18,6 +18,11 @@ enum OrderStatus {
   failed
 }
 
+enum CouponType {
+  percent
+  fixed
+}
+
 enum ProductRegionType {
   lips
   nails
@@ -65,9 +70,10 @@ model User {
   role     String  @default("customer")
   isActive Boolean @default(true)
 
-  cart      Cart?
-  orders    Order[]
-  addresses Address[]
+  cart         Cart?
+  orders       Order[]
+  addresses    Address[]
+  couponUsages CouponUsage[]
 
   beautyProfile BeautyProfile?
   tryOnSessions VirtualTryOnSession[]
@@ -233,7 +239,17 @@ model Order {
   address   Address? @relation(fields: [addressId], references: [id])
 
   status OrderStatus @default(pending)
-  total  Decimal     @default(0) @db.Decimal(18, 2)
+
+  total         Decimal @default(0) @db.Decimal(18, 2)
+  subtotal      Decimal @default(0) @db.Decimal(18, 2)
+  discountTotal Decimal @default(0) @db.Decimal(18, 2)
+  payableTotal  Decimal @default(0) @db.Decimal(18, 2)
+
+  couponId   Int?
+  couponCode String?
+  coupon     Coupon? @relation(fields: [couponId], references: [id])
+
+  couponUsage CouponUsage?
 
   authority String?
 
@@ -250,6 +266,9 @@ model Order {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([couponId])
+  @@index([couponCode])
 }
 
 model OrderItem {
@@ -271,6 +290,56 @@ model OrderItem {
   variant ProductVariant @relation(fields: [variantId], references: [id])
 
   createdAt DateTime @default(now())
+}
+
+model Coupon {
+  id          Int     @id @default(autoincrement())
+  code        String  @unique
+  title       String?
+  description String?
+
+  type  CouponType @default(percent)
+  value Decimal    @db.Decimal(18, 2)
+
+  maxDiscount    Decimal? @db.Decimal(18, 2)
+  minOrderAmount Decimal  @default(0) @db.Decimal(18, 2)
+
+  usageLimit        Int?
+  usageLimitPerUser Int?
+  usedCount         Int  @default(0)
+
+  startsAt  DateTime?
+  expiresAt DateTime?
+
+  isActive Boolean @default(true)
+
+  orders Order[]
+  usages CouponUsage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([expiresAt])
+}
+
+model CouponUsage {
+  id Int @id @default(autoincrement())
+
+  couponId Int
+  userId   Int
+  orderId  Int @unique
+
+  discountAmount Decimal @db.Decimal(18, 2)
+
+  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([couponId])
+  @@index([userId])
 }
 
 model ProductShade {
