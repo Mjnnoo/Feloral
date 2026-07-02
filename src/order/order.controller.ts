@@ -41,6 +41,14 @@ export class OrderController {
     return this.orderService.getMyOrders(user.id);
   }
 
+  @Get('my-orders/:id/invoice')
+  getMyOrderInvoice(
+    @User() user: AuthUser,
+    @Param('id', ParseIntPipe) orderId: number,
+  ) {
+    return this.orderService.getMyOrderInvoice(user.id, orderId);
+  }
+
   @Get('my-orders/:id')
   getMyOrderById(
     @User() user: AuthUser,
@@ -64,6 +72,13 @@ export class OrderController {
       status,
       search,
     });
+  }
+
+  @Get('admin/orders/:id/invoice')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  getAdminOrderInvoice(@Param('id', ParseIntPipe) orderId: number) {
+    return this.orderService.getAdminOrderInvoice(orderId);
   }
 
   @Get('admin/orders/:id')

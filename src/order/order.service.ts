@@ -303,6 +303,153 @@ export class OrderService {
     };
   }
 
+  private formatInvoice(order: any) {
+    const items =
+      order.items?.map((item: any) => ({
+        id: item.id,
+        productId: item.productId,
+        variantId: item.variantId,
+
+        productName: item.productName,
+        variantTitle: item.variantTitle,
+        sku: item.sku,
+
+        unitPrice: Number(item.price),
+        quantity: item.quantity,
+        lineTotal: Number(item.total),
+
+        product: item.product
+          ? {
+              id: item.product.id,
+              name: item.product.name,
+              englishName: item.product.englishName,
+              slug: item.product.slug,
+            }
+          : null,
+
+        variant: item.variant
+          ? {
+              id: item.variant.id,
+              title: item.variant.title,
+              sku: item.variant.sku,
+              volume: item.variant.volume,
+              barcode: item.variant.barcode,
+            }
+          : null,
+      })) || [];
+
+    const calculatedSubtotal = items.reduce(
+      (sum: number, item: any) => sum + item.lineTotal,
+      0,
+    );
+
+    const subtotal =
+      Number(order.subtotal ?? 0) > 0
+        ? Number(order.subtotal)
+        : calculatedSubtotal;
+
+    const discountTotal = Number(order.discountTotal ?? 0);
+
+    const payableTotal =
+      Number(order.payableTotal ?? 0) > 0
+        ? Number(order.payableTotal)
+        : Number(order.total ?? 0);
+
+    const total =
+      Number(order.total ?? 0) > 0 ? Number(order.total) : payableTotal;
+
+    const invoiceNumber = `FEL-${String(order.id).padStart(6, '0')}`;
+
+    return {
+      invoice: {
+        invoiceNumber,
+        orderId: order.id,
+        issuedAt: new Date().toISOString(),
+        orderCreatedAt: order.createdAt,
+        orderUpdatedAt: order.updatedAt,
+      },
+
+      customer: order.user
+        ? {
+            id: order.user.id,
+            fullName: order.user.fullName,
+            mobile: order.user.mobile,
+            email: order.user.email,
+          }
+        : null,
+
+      order: {
+        id: order.id,
+        status: order.status,
+        isPaid: order.status === OrderStatus.paid,
+        authority: order.authority,
+      },
+
+      shipping: {
+        receiverName: order.shippingReceiverName,
+        receiverMobile: order.shippingReceiverMobile,
+        province: order.shippingProvince,
+        city: order.shippingCity,
+        addressLine: order.shippingAddressLine,
+        postalCode: order.shippingPostalCode,
+        plaque: order.shippingPlaque,
+        unit: order.shippingUnit,
+        fullAddress: [
+          order.shippingProvince,
+          order.shippingCity,
+          order.shippingAddressLine,
+          order.shippingPlaque ? `پلاک ${order.shippingPlaque}` : null,
+          order.shippingUnit ? `واحد ${order.shippingUnit}` : null,
+        ]
+          .filter(Boolean)
+          .join('، '),
+      },
+
+      coupon: order.coupon
+        ? {
+            id: order.coupon.id,
+            code: order.coupon.code,
+            title: order.coupon.title,
+            type: order.coupon.type,
+            value: Number(order.coupon.value),
+          }
+        : null,
+
+      couponCode: order.couponCode,
+
+      items,
+
+      summary: {
+        itemCount: items.length,
+        totalQuantity: items.reduce(
+          (sum: number, item: any) => sum + item.quantity,
+          0,
+        ),
+
+        subtotal,
+        discountTotal,
+
+        shippingCost: 0,
+
+        payableTotal,
+        total,
+      },
+
+      texts: {
+        title: 'فاکتور سفارش',
+        paymentStatus:
+          order.status === OrderStatus.paid
+            ? 'پرداخت‌شده'
+            : 'در انتظار پرداخت',
+        discountText:
+          discountTotal > 0
+            ? `تخفیف اعمال‌شده: ${discountTotal.toLocaleString('fa-IR')} تومان`
+            : 'بدون تخفیف',
+        finalAmountText: `${payableTotal.toLocaleString('fa-IR')} تومان`,
+      },
+    };
+  }
+
   private getOrderInclude() {
     return {
       user: {
@@ -643,6 +790,25 @@ export class OrderService {
     return this.formatOrder(order);
   }
 
+  async getMyOrderInvoice(userId: number, orderId: number) {
+    const order = await this.prisma.order.findFirst({
+      where: {
+        id: orderId,
+        userId,
+      },
+      include: this.getOrderInclude(),
+    });
+
+    if (!order) {
+      throw new NotFoundException('سفارش پیدا نشد');
+    }
+
+    return {
+      message: 'فاکتور سفارش با موفقیت دریافت شد',
+      invoice: this.formatInvoice(order),
+    };
+  }
+
   async getAdminOrders(query: AdminOrderQuery) {
     const page = this.toNumber(query.page, 1);
     const limit = Math.min(this.toNumber(query.limit, 20), 100);
@@ -753,6 +919,24 @@ export class OrderService {
     }
 
     return this.formatOrder(order);
+  }
+
+  async getAdminOrderInvoice(orderId: number) {
+    const order = await this.prisma.order.findUnique({
+      where: {
+        id: orderId,
+      },
+      include: this.getOrderInclude(),
+    });
+
+    if (!order) {
+      throw new NotFoundException('سفارش پیدا نشد');
+    }
+
+    return {
+      message: 'فاکتور سفارش با موفقیت دریافت شد',
+      invoice: this.formatInvoice(order),
+    };
   }
 
   async updateAdminOrderStatus(
