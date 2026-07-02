@@ -3,7 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderStatus, Prisma } from '@prisma/client';
+import {
+  CouponType,
+  OrderStatus,
+  Prisma,
+} from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { CheckoutDto } from './dto/checkout.dto';
@@ -28,6 +32,16 @@ export class OrderService {
     }
 
     return number;
+  }
+
+  private normalizeCouponCode(code?: string | null) {
+    if (!code) {
+      return null;
+    }
+
+    const normalized = code.trim().toUpperCase();
+
+    return normalized.length > 0 ? normalized : null;
   }
 
   private getFinalPrice(
@@ -59,15 +73,119 @@ export class OrderService {
     };
   }
 
-  private isStockReturnedStatus(status: OrderStatus) {
-  const returnedStatuses: OrderStatus[] = [
-    OrderStatus.canceled,
-    OrderStatus.refunded,
-    OrderStatus.failed,
-  ];
+  private calculateCouponDiscount(coupon: any, subtotal: number) {
+    let discountAmount = 0;
 
-  return returnedStatuses.includes(status);
-}
+    if (coupon.type === CouponType.percent) {
+      discountAmount = Math.floor((subtotal * Number(coupon.value)) / 100);
+
+      if (
+        coupon.maxDiscount !== null &&
+        coupon.maxDiscount !== undefined &&
+        discountAmount > Number(coupon.maxDiscount)
+      ) {
+        discountAmount = Number(coupon.maxDiscount);
+      }
+    }
+
+    if (coupon.type === CouponType.fixed) {
+      discountAmount = Number(coupon.value);
+    }
+
+    if (discountAmount > subtotal) {
+      discountAmount = subtotal;
+    }
+
+    if (discountAmount < 0) {
+      discountAmount = 0;
+    }
+
+    return discountAmount;
+  }
+
+  private async validateCouponForCheckout(
+    tx: Prisma.TransactionClient,
+    userId: number,
+    couponCode: string,
+    subtotal: number,
+  ) {
+    const coupon = await tx.coupon.findUnique({
+      where: {
+        code: couponCode,
+      },
+    });
+
+    if (!coupon) {
+      throw new NotFoundException('کد تخفیف پیدا نشد');
+    }
+
+    const now = new Date();
+
+    if (!coupon.isActive) {
+      throw new BadRequestException('این کد تخفیف غیرفعال است');
+    }
+
+    if (coupon.startsAt && coupon.startsAt > now) {
+      throw new BadRequestException(
+        'زمان استفاده از این کد تخفیف هنوز شروع نشده است',
+      );
+    }
+
+    if (coupon.expiresAt && coupon.expiresAt < now) {
+      throw new BadRequestException('این کد تخفیف منقضی شده است');
+    }
+
+    if (
+      coupon.usageLimit !== null &&
+      coupon.usageLimit !== undefined &&
+      coupon.usedCount >= coupon.usageLimit
+    ) {
+      throw new BadRequestException('ظرفیت استفاده از این کد تخفیف تمام شده است');
+    }
+
+    if (subtotal < Number(coupon.minOrderAmount)) {
+      throw new BadRequestException(
+        `حداقل مبلغ سفارش برای این کد تخفیف ${Number(
+          coupon.minOrderAmount,
+        )} تومان است`,
+      );
+    }
+
+    if (
+      coupon.usageLimitPerUser !== null &&
+      coupon.usageLimitPerUser !== undefined
+    ) {
+      const userUsageCount = await tx.couponUsage.count({
+        where: {
+          couponId: coupon.id,
+          userId,
+        },
+      });
+
+      if (userUsageCount >= coupon.usageLimitPerUser) {
+        throw new BadRequestException(
+          'شما قبلاً از این کد تخفیف به تعداد مجاز استفاده کرده‌اید',
+        );
+      }
+    }
+
+    const discountAmount = this.calculateCouponDiscount(coupon, subtotal);
+
+    return {
+      coupon,
+      discountAmount,
+    };
+  }
+
+  private isStockReturnedStatus(status: OrderStatus) {
+    const returnedStatuses: OrderStatus[] = [
+      OrderStatus.canceled,
+      OrderStatus.refunded,
+      OrderStatus.failed,
+    ];
+
+    return returnedStatuses.includes(status);
+  }
 
   private formatOrder(order: any) {
     const items =
@@ -109,6 +227,15 @@ export class OrderService {
         createdAt: item.createdAt,
       })) || [];
 
+    const total = Number(order.total ?? 0);
+    const subtotal =
+      Number(order.subtotal ?? 0) > 0 ? Number(order.subtotal) : total;
+    const discountTotal = Number(order.discountTotal ?? 0);
+    const payableTotal =
+      Number(order.payableTotal ?? 0) > 0
+        ? Number(order.payableTotal)
+        : total;
+
     return {
       id: order.id,
       userId: order.userId,
@@ -126,7 +253,23 @@ export class OrderService {
       addressId: order.addressId,
 
       status: order.status,
-      total: Number(order.total),
+
+      subtotal,
+      discountTotal,
+      payableTotal,
+      total,
+
+      coupon: order.coupon
+        ? {
+            id: order.coupon.id,
+            code: order.coupon.code,
+            title: order.coupon.title,
+            type: order.coupon.type,
+            value: Number(order.coupon.value),
+          }
+        : null,
+
+      couponCode: order.couponCode,
 
       authority: order.authority,
 
@@ -149,7 +292,10 @@ export class OrderService {
           (sum: number, item: any) => sum + item.quantity,
           0,
         ),
-        total: Number(order.total),
+        subtotal,
+        discountTotal,
+        payableTotal,
+        total,
       },
 
       createdAt: order.createdAt,
@@ -169,6 +315,8 @@ export class OrderService {
         },
       },
       address: true,
+      coupon: true,
+      couponUsage: true,
       items: {
         orderBy: {
           id: 'asc' as const,
@@ -256,7 +404,7 @@ export class OrderService {
       }
 
       const orderItemsData: Prisma.OrderItemCreateWithoutOrderInput[] = [];
-      let orderTotal = 0;
+      let subtotal = 0;
 
       for (const cartItem of cart.items) {
         const variant = cartItem.variant;
@@ -280,7 +428,7 @@ export class OrderService {
 
         const priceInfo = this.getFinalPrice(variant.price, variant.salePrice);
         const lineTotal = priceInfo.finalPrice * cartItem.quantity;
-        orderTotal += lineTotal;
+        subtotal += lineTotal;
 
         orderItemsData.push({
           product: {
@@ -302,6 +450,35 @@ export class OrderService {
         });
       }
 
+      const normalizedCouponCode = this.normalizeCouponCode(dto.couponCode);
+
+      let couponConnect:
+        | {
+            id: number;
+          }
+        | undefined;
+
+      let couponCodeSnapshot: string | null = null;
+      let discountTotal = 0;
+
+      if (normalizedCouponCode) {
+        const couponResult = await this.validateCouponForCheckout(
+          tx,
+          userId,
+          normalizedCouponCode,
+          subtotal,
+        );
+
+        couponConnect = {
+          id: couponResult.coupon.id,
+        };
+
+        couponCodeSnapshot = couponResult.coupon.code;
+        discountTotal = couponResult.discountAmount;
+      }
+
+      const payableTotal = subtotal - discountTotal;
+
       const order = await tx.order.create({
         data: {
           user: {
@@ -318,7 +495,20 @@ export class OrderService {
             : undefined,
 
           status: OrderStatus.pending,
-          total: new Prisma.Decimal(orderTotal),
+
+          subtotal: new Prisma.Decimal(subtotal),
+          discountTotal: new Prisma.Decimal(discountTotal),
+          payableTotal: new Prisma.Decimal(payableTotal),
+
+          // برای سازگاری با پرداخت و داشبورد، total همان مبلغ نهایی قابل پرداخت است
+          total: new Prisma.Decimal(payableTotal),
+
+          coupon: couponConnect
+            ? {
+                connect: couponConnect,
+              }
+            : undefined,
+          couponCode: couponCodeSnapshot,
 
           shippingReceiverName: addressSnapshot.shippingReceiverName,
           shippingReceiverMobile: addressSnapshot.shippingReceiverMobile,
@@ -334,6 +524,40 @@ export class OrderService {
           },
         },
       });
+
+      if (couponConnect && discountTotal > 0) {
+        await tx.couponUsage.create({
+          data: {
+            coupon: {
+              connect: {
+                id: couponConnect.id,
+              },
+            },
+            user: {
+              connect: {
+                id: userId,
+              },
+            },
+            order: {
+              connect: {
+                id: order.id,
+              },
+            },
+            discountAmount: new Prisma.Decimal(discountTotal),
+          },
+        });
+
+        await tx.coupon.update({
+          where: {
+            id: couponConnect.id,
+          },
+          data: {
+            usedCount: {
+              increment: 1,
+            },
+          },
+        });
+      }
 
       for (const cartItem of cart.items) {
         const stockUpdate = await tx.productVariant.updateMany({
@@ -465,6 +689,12 @@ export class OrderService {
         },
         {
           shippingReceiverMobile: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          couponCode: {
             contains: search,
             mode: 'insensitive',
           },
