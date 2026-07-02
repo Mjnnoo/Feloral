@@ -22,6 +22,10 @@ type PreviewRow = {
     salePrice: number | null;
     stock: number;
     isActive: boolean;
+    imageUrl: string;
+    imageAlt: string;
+    imageIsPrimary: boolean;
+    imageSortOrder: number;
   };
 };
 
@@ -89,11 +93,11 @@ export class ProductBulkService {
       return defaultValue;
     }
 
-    if (['true', '1', 'yes', 'active', 'فعال'].includes(raw)) {
+    if (['true', '1', 'yes', 'active', 'فعال', 'بله'].includes(raw)) {
       return true;
     }
 
-    if (['false', '0', 'no', 'inactive', 'غیرفعال'].includes(raw)) {
+    if (['false', '0', 'no', 'inactive', 'غیرفعال', 'خیر'].includes(raw)) {
       return false;
     }
 
@@ -144,6 +148,11 @@ export class ProductBulkService {
       const stock = this.parseNumber(row.stock) ?? 0;
       const isActive = this.parseBoolean(row.isActive, true);
 
+      const imageUrl = String(row.imageUrl || '').trim();
+      const imageAlt = String(row.imageAlt || '').trim();
+      const imageIsPrimary = this.parseBoolean(row.imageIsPrimary, true);
+      const imageSortOrder = this.parseNumber(row.imageSortOrder) ?? 0;
+
       if (!name) errors.push('نام محصول وارد نشده است');
       if (!slug) errors.push('اسلاگ محصول وارد نشده است');
       if (!brandSlug) errors.push('اسلاگ برند وارد نشده است');
@@ -151,10 +160,18 @@ export class ProductBulkService {
       if (!variantTitle) errors.push('عنوان تنوع وارد نشده است');
       if (!sku) errors.push('SKU وارد نشده است');
       if (price === null || price <= 0) errors.push('قیمت نامعتبر است');
+
       if (salePrice !== null && salePrice < 0) {
         errors.push('قیمت تخفیف نامعتبر است');
       }
-      if (stock < 0) errors.push('موجودی نامعتبر است');
+
+      if (stock < 0) {
+        errors.push('موجودی نامعتبر است');
+      }
+
+      if (imageSortOrder < 0) {
+        errors.push('ترتیب عکس نامعتبر است');
+      }
 
       const brand = brandSlug
         ? await this.prisma.brand.findUnique({ where: { slug: brandSlug } })
@@ -174,12 +191,21 @@ export class ProductBulkService {
         ? await this.prisma.productVariant.findUnique({ where: { sku } })
         : null;
 
-      if (brandSlug && !brand) errors.push('برند با این slug پیدا نشد');
+      if (brandSlug && !brand) {
+        errors.push('برند با این slug پیدا نشد');
+      }
+
       if (categorySlug && !category) {
         errors.push('دسته‌بندی با این slug پیدا نشد');
       }
-      if (existingProduct) errors.push('محصول با این slug قبلاً وجود دارد');
-      if (existingVariant) errors.push('تنوع با این SKU قبلاً وجود دارد');
+
+      if (existingProduct) {
+        errors.push('محصول با این slug قبلاً وجود دارد');
+      }
+
+      if (existingVariant) {
+        errors.push('تنوع با این SKU قبلاً وجود دارد');
+      }
 
       preview.push({
         rowNumber,
@@ -201,6 +227,10 @@ export class ProductBulkService {
           salePrice,
           stock,
           isActive,
+          imageUrl,
+          imageAlt,
+          imageIsPrimary,
+          imageSortOrder,
         },
       });
     }
@@ -239,24 +269,39 @@ export class ProductBulkService {
       const stock = this.parseNumber(data.stock) ?? 0;
       const isActive = this.parseBoolean(data.isActive, true);
 
+      const imageUrl = String(data.imageUrl || '').trim();
+      const imageAlt = String(data.imageAlt || '').trim();
+      const imageIsPrimary = this.parseBoolean(data.imageIsPrimary, true);
+      const imageSortOrder = this.parseNumber(data.imageSortOrder) ?? 0;
+
       if (!name) throw new BadRequestException('نام محصول وارد نشده است');
       if (!slug) throw new BadRequestException('اسلاگ محصول وارد نشده است');
       if (!brandSlug) throw new BadRequestException('اسلاگ برند وارد نشده است');
+
       if (!categorySlug) {
         throw new BadRequestException('اسلاگ دسته‌بندی وارد نشده است');
       }
+
       if (!variantTitle) {
         throw new BadRequestException('عنوان تنوع وارد نشده است');
       }
+
       if (!sku) throw new BadRequestException('SKU وارد نشده است');
+
       if (price === null || price <= 0) {
         throw new BadRequestException('قیمت نامعتبر است');
       }
+
       if (salePrice !== null && salePrice < 0) {
         throw new BadRequestException('قیمت تخفیف نامعتبر است');
       }
+
       if (stock < 0) {
         throw new BadRequestException('موجودی نامعتبر است');
+      }
+
+      if (imageSortOrder < 0) {
+        throw new BadRequestException('ترتیب عکس نامعتبر است');
       }
 
       const brand = await this.prisma.brand.findUnique({
@@ -291,34 +336,58 @@ export class ProductBulkService {
         throw new BadRequestException(`تنوع با SKU ${sku} قبلاً وجود دارد`);
       }
 
-      const product = await this.prisma.product.create({
-        data: {
-          name,
-          englishName: englishName || null,
-          slug,
-          shortDesc: shortDesc || null,
-          description: description || null,
-          isActive,
-          brandId: brand.id,
-          categoryId: category.id,
-          variants: {
-            create: {
-              title: variantTitle,
-              sku,
-              volume,
-              barcode: barcode || null,
-              price,
-              salePrice,
-              stock,
-              isActive,
+      const product = await this.prisma.$transaction(async (tx) => {
+        const createdProduct = await tx.product.create({
+          data: {
+            name,
+            englishName: englishName || null,
+            slug,
+            shortDesc: shortDesc || null,
+            description: description || null,
+            isActive,
+            brandId: brand.id,
+            categoryId: category.id,
+            variants: {
+              create: {
+                title: variantTitle,
+                sku,
+                volume,
+                barcode: barcode || null,
+                price,
+                salePrice,
+                stock,
+                isActive,
+              },
             },
           },
-        },
-        include: {
-          variants: true,
-          brand: true,
-          category: true,
-        },
+          include: {
+            variants: true,
+            brand: true,
+            category: true,
+          },
+        });
+
+        if (imageUrl) {
+          await tx.productImage.create({
+            data: {
+              imageUrl,
+              alt: imageAlt || null,
+              isPrimary: imageIsPrimary,
+              sortOrder: imageSortOrder,
+              productId: createdProduct.id,
+            },
+          });
+        }
+
+        const images = await tx.productImage.findMany({
+          where: { productId: createdProduct.id },
+          orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }],
+        });
+
+        return {
+          ...createdProduct,
+          images,
+        };
       });
 
       created.push(product);
@@ -390,6 +459,10 @@ export class ProductBulkService {
         ? undefined
         : this.parseVolume(row.volume);
 
+      const imageSortOrder = this.isEmptyCell(row.imageSortOrder)
+        ? undefined
+        : this.parseNumber(row.imageSortOrder);
+
       if (price !== undefined && (price === null || price <= 0)) {
         errors.push('قیمت نامعتبر است');
       }
@@ -404,6 +477,13 @@ export class ProductBulkService {
 
       if (volume !== undefined && volume === null) {
         errors.push('حجم محصول نامعتبر است');
+      }
+
+      if (
+        imageSortOrder !== undefined &&
+        (imageSortOrder === null || imageSortOrder < 0)
+      ) {
+        errors.push('ترتیب عکس نامعتبر است');
       }
 
       const data: Record<string, any> = {
@@ -434,24 +514,29 @@ export class ProductBulkService {
         data.barcode = String(row.barcode).trim();
       }
 
-      if (price !== undefined) {
-        data.price = price;
-      }
-
-      if (salePrice !== undefined) {
-        data.salePrice = salePrice;
-      }
-
-      if (stock !== undefined) {
-        data.stock = stock;
-      }
-
-      if (volume !== undefined) {
-        data.volume = volume;
-      }
+      if (price !== undefined) data.price = price;
+      if (salePrice !== undefined) data.salePrice = salePrice;
+      if (stock !== undefined) data.stock = stock;
+      if (volume !== undefined) data.volume = volume;
 
       if (!this.isEmptyCell(row.isActive)) {
         data.isActive = this.parseBoolean(row.isActive, true);
+      }
+
+      if (!this.isEmptyCell(row.imageUrl)) {
+        data.imageUrl = String(row.imageUrl).trim();
+      }
+
+      if (!this.isEmptyCell(row.imageAlt)) {
+        data.imageAlt = String(row.imageAlt).trim();
+      }
+
+      if (!this.isEmptyCell(row.imageIsPrimary)) {
+        data.imageIsPrimary = this.parseBoolean(row.imageIsPrimary, true);
+      }
+
+      if (imageSortOrder !== undefined) {
+        data.imageSortOrder = imageSortOrder;
       }
 
       preview.push({
@@ -508,6 +593,7 @@ export class ProductBulkService {
 
       const productData: Record<string, any> = {};
       const variantData: Record<string, any> = {};
+      const imageData: Record<string, any> = {};
 
       if (!this.isEmptyCell(data.name)) {
         productData.name = String(data.name).trim();
@@ -582,7 +668,35 @@ export class ProductBulkService {
         variantData.isActive = isActive;
       }
 
-      if (!Object.keys(productData).length && !Object.keys(variantData).length) {
+      if (!this.isEmptyCell(data.imageUrl)) {
+        imageData.imageUrl = String(data.imageUrl).trim();
+      }
+
+      if (!this.isEmptyCell(data.imageAlt)) {
+        imageData.alt = String(data.imageAlt).trim();
+      }
+
+      if (!this.isEmptyCell(data.imageIsPrimary)) {
+        imageData.isPrimary = this.parseBoolean(data.imageIsPrimary, true);
+      }
+
+      if (!this.isEmptyCell(data.imageSortOrder)) {
+        const imageSortOrder = this.parseNumber(data.imageSortOrder);
+
+        if (imageSortOrder === null || imageSortOrder < 0) {
+          throw new BadRequestException(
+            `ترتیب عکس برای SKU ${sku} نامعتبر است`,
+          );
+        }
+
+        imageData.sortOrder = imageSortOrder;
+      }
+
+      if (
+        !Object.keys(productData).length &&
+        !Object.keys(variantData).length &&
+        !Object.keys(imageData).length
+      ) {
         throw new BadRequestException(
           `هیچ داده‌ای برای آپدیت SKU ${sku} ارسال نشده است`,
         );
@@ -603,7 +717,41 @@ export class ProductBulkService {
           });
         }
 
-        return tx.product.findUnique({
+        if (Object.keys(imageData).length) {
+          const existingImage = await tx.productImage.findFirst({
+            where: { productId: variant.productId },
+            orderBy: [
+              { isPrimary: 'desc' },
+              { sortOrder: 'asc' },
+              { id: 'asc' },
+            ],
+          });
+
+          if (existingImage) {
+            await tx.productImage.update({
+              where: { id: existingImage.id },
+              data: imageData,
+            });
+          } else {
+            if (!imageData.imageUrl) {
+              throw new BadRequestException(
+                `برای ساخت عکس محصول، imageUrl برای SKU ${sku} لازم است`,
+              );
+            }
+
+            await tx.productImage.create({
+              data: {
+                imageUrl: imageData.imageUrl,
+                alt: imageData.alt || null,
+                isPrimary: imageData.isPrimary ?? true,
+                sortOrder: imageData.sortOrder ?? 0,
+                productId: variant.productId,
+              },
+            });
+          }
+        }
+
+        const product = await tx.product.findUnique({
           where: { id: variant.productId },
           include: {
             variants: true,
@@ -611,6 +759,24 @@ export class ProductBulkService {
             category: true,
           },
         });
+
+        if (!product) {
+          throw new BadRequestException(`محصول مربوط به SKU ${sku} پیدا نشد`);
+        }
+
+        const images = await tx.productImage.findMany({
+          where: { productId: variant.productId },
+          orderBy: [
+            { isPrimary: 'desc' },
+            { sortOrder: 'asc' },
+            { id: 'asc' },
+          ],
+        });
+
+        return {
+          ...product,
+          images,
+        };
       });
 
       updated.push(result);
@@ -638,6 +804,11 @@ export class ProductBulkService {
     const rows: any[] = [];
 
     for (const product of products) {
+      const primaryImage = await this.prisma.productImage.findFirst({
+        where: { productId: product.id },
+        orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }],
+      });
+
       for (const variant of product.variants) {
         rows.push({
           name: product.name,
@@ -655,6 +826,10 @@ export class ProductBulkService {
           salePrice: variant.salePrice ? Number(variant.salePrice) : '',
           stock: variant.stock,
           isActive: product.isActive,
+          imageUrl: primaryImage?.imageUrl || '',
+          imageAlt: primaryImage?.alt || '',
+          imageIsPrimary: primaryImage?.isPrimary ?? '',
+          imageSortOrder: primaryImage?.sortOrder ?? '',
         });
       }
     }
@@ -688,6 +863,10 @@ export class ProductBulkService {
         salePrice: 790000,
         stock: 10,
         isActive: true,
+        imageUrl: '/uploads/products/loreal-hydrating-cream.jpg',
+        imageAlt: 'کرم آبرسان لورآل',
+        imageIsPrimary: true,
+        imageSortOrder: 0,
       },
     ];
 
@@ -713,10 +892,14 @@ export class ProductBulkService {
         variantTitle: '',
         volume: '',
         barcode: '',
-        price: 5890000,
-        salePrice: 5490000,
-        stock: 25,
+        price: 6000000,
+        salePrice: 5700000,
+        stock: 20,
         isActive: true,
+        imageUrl: '/uploads/products/dior-sauvage.jpg',
+        imageAlt: 'Dior Sauvage',
+        imageIsPrimary: true,
+        imageSortOrder: 0,
       },
     ];
 
