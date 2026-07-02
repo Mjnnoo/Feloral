@@ -22,7 +22,7 @@ export class AddressesService {
     const shouldBeDefault =
       data.isDefault === true || activeAddressesCount === 0;
 
-    return this.prisma.$transaction(async (tx) => {
+    const address = await this.prisma.$transaction(async (tx) => {
       if (shouldBeDefault) {
         await tx.address.updateMany({
           where: {
@@ -51,10 +51,15 @@ export class AddressesService {
         },
       });
     });
+
+    return {
+      message: 'آدرس با موفقیت ثبت شد',
+      address,
+    };
   }
 
-  findAll(userId: number) {
-    return this.prisma.address.findMany({
+  async findAll(userId: number) {
+    const addresses = await this.prisma.address.findMany({
       where: {
         userId,
         isActive: true,
@@ -68,6 +73,13 @@ export class AddressesService {
         },
       ],
     });
+
+    return {
+      data: addresses,
+      meta: {
+        total: addresses.length,
+      },
+    };
   }
 
   async findOne(userId: number, id: number) {
@@ -80,7 +92,7 @@ export class AddressesService {
     });
 
     if (!address) {
-      throw new NotFoundException('Address not found');
+      throw new NotFoundException('آدرس پیدا نشد');
     }
 
     return address;
@@ -93,7 +105,7 @@ export class AddressesService {
   ) {
     await this.findOne(userId, id);
 
-    return this.prisma.$transaction(async (tx) => {
+    const address = await this.prisma.$transaction(async (tx) => {
       if (data.isDefault === true) {
         await tx.address.updateMany({
           where: {
@@ -109,16 +121,23 @@ export class AddressesService {
       }
 
       return tx.address.update({
-        where: { id },
+        where: {
+          id,
+        },
         data,
       });
     });
+
+    return {
+      message: 'آدرس با موفقیت ویرایش شد',
+      address,
+    };
   }
 
   async setDefault(userId: number, id: number) {
     await this.findOne(userId, id);
 
-    return this.prisma.$transaction(async (tx) => {
+    const address = await this.prisma.$transaction(async (tx) => {
       await tx.address.updateMany({
         where: {
           userId,
@@ -129,19 +148,28 @@ export class AddressesService {
       });
 
       return tx.address.update({
-        where: { id },
+        where: {
+          id,
+        },
         data: {
           isDefault: true,
         },
       });
     });
+
+    return {
+      message: 'آدرس پیش‌فرض با موفقیت تغییر کرد',
+      address,
+    };
   }
 
   async remove(userId: number, id: number) {
     const address = await this.findOne(userId, id);
 
     await this.prisma.address.update({
-      where: { id },
+      where: {
+        id,
+      },
       data: {
         isActive: false,
         isDefault: false,
@@ -161,7 +189,9 @@ export class AddressesService {
 
       if (nextAddress) {
         await this.prisma.address.update({
-          where: { id: nextAddress.id },
+          where: {
+            id: nextAddress.id,
+          },
           data: {
             isDefault: true,
           },
@@ -170,7 +200,7 @@ export class AddressesService {
     }
 
     return {
-      message: 'Address removed successfully',
+      message: 'آدرس با موفقیت حذف شد',
     };
   }
 }

@@ -8,56 +8,56 @@ import {
 
 export class UpdateAddressDto {
   @IsOptional()
-  @IsString()
-  @Length(2, 80)
+  @IsString({ message: 'عنوان آدرس باید متن باشد' })
+  @Length(2, 80, { message: 'عنوان آدرس باید بین ۲ تا ۸۰ کاراکتر باشد' })
   title?: string;
 
   @IsOptional()
-  @IsString()
-  @Length(2, 120)
+  @IsString({ message: 'نام گیرنده باید متن باشد' })
+  @Length(2, 120, { message: 'نام گیرنده باید بین ۲ تا ۱۲۰ کاراکتر باشد' })
   receiverName?: string;
 
   @IsOptional()
-  @IsString()
-  @Length(10, 15)
+  @IsString({ message: 'شماره موبایل گیرنده باید متن باشد' })
+  @Length(10, 15, { message: 'شماره موبایل گیرنده باید بین ۱۰ تا ۱۵ رقم باشد' })
   @Matches(/^\+?[0-9]+$/, {
-    message: 'receiverMobile must contain only numbers and may start with +',
+    message: 'شماره موبایل گیرنده باید فقط شامل عدد باشد و می‌تواند با + شروع شود',
   })
   receiverMobile?: string;
 
   @IsOptional()
-  @IsString()
-  @Length(2, 80)
+  @IsString({ message: 'استان باید متن باشد' })
+  @Length(2, 80, { message: 'استان باید بین ۲ تا ۸۰ کاراکتر باشد' })
   province?: string;
 
   @IsOptional()
-  @IsString()
-  @Length(2, 80)
+  @IsString({ message: 'شهر باید متن باشد' })
+  @Length(2, 80, { message: 'شهر باید بین ۲ تا ۸۰ کاراکتر باشد' })
   city?: string;
 
   @IsOptional()
-  @IsString()
-  @Length(5, 500)
+  @IsString({ message: 'آدرس باید متن باشد' })
+  @Length(5, 500, { message: 'آدرس باید بین ۵ تا ۵۰۰ کاراکتر باشد' })
   addressLine?: string;
 
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'کد پستی باید متن باشد' })
   @Matches(/^[0-9]{10}$/, {
-    message: 'postalCode must be exactly 10 digits',
+    message: 'کد پستی باید دقیقاً ۱۰ رقم باشد',
   })
   postalCode?: string;
 
   @IsOptional()
-  @IsString()
-  @Length(1, 20)
+  @IsString({ message: 'پلاک باید متن باشد' })
+  @Length(1, 20, { message: 'پلاک باید بین ۱ تا ۲۰ کاراکتر باشد' })
   plaque?: string;
 
   @IsOptional()
-  @IsString()
-  @Length(1, 20)
+  @IsString({ message: 'واحد باید متن باشد' })
+  @Length(1, 20, { message: 'واحد باید بین ۱ تا ۲۰ کاراکتر باشد' })
   unit?: string;
 
   @IsOptional()
-  @IsBoolean()
+  @IsBoolean({ message: 'وضعیت پیش‌فرض بودن آدرس باید true یا false باشد' })
   isDefault?: boolean;
 }

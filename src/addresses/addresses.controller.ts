@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -22,18 +23,19 @@ type AuthUser = {
   role: string;
 };
 
+const PersianIdPipe = new ParseIntPipe({
+  exceptionFactory: () => {
+    return new BadRequestException('شناسه آدرس باید عدد باشد');
+  },
+});
+
 @Controller('addresses')
 @UseGuards(JwtAuthGuard)
 export class AddressesController {
-  constructor(
-    private readonly addressesService: AddressesService,
-  ) {}
+  constructor(private readonly addressesService: AddressesService) {}
 
   @Post()
-  create(
-    @User() user: AuthUser,
-    @Body() dto: CreateAddressDto,
-  ) {
+  create(@User() user: AuthUser, @Body() dto: CreateAddressDto) {
     return this.addressesService.create(user.id, dto);
   }
 
@@ -45,7 +47,7 @@ export class AddressesController {
   @Get(':id')
   findOne(
     @User() user: AuthUser,
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', PersianIdPipe) id: number,
   ) {
     return this.addressesService.findOne(user.id, id);
   }
@@ -53,7 +55,7 @@ export class AddressesController {
   @Patch(':id')
   update(
     @User() user: AuthUser,
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', PersianIdPipe) id: number,
     @Body() dto: UpdateAddressDto,
   ) {
     return this.addressesService.update(user.id, id, dto);
@@ -62,7 +64,7 @@ export class AddressesController {
   @Patch(':id/default')
   setDefault(
     @User() user: AuthUser,
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', PersianIdPipe) id: number,
   ) {
     return this.addressesService.setDefault(user.id, id);
   }
@@ -70,7 +72,7 @@ export class AddressesController {
   @Delete(':id')
   remove(
     @User() user: AuthUser,
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', PersianIdPipe) id: number,
   ) {
     return this.addressesService.remove(user.id, id);
   }
