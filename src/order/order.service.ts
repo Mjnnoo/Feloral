@@ -1,386 +1,93 @@
 import {
   BadRequestException,
   Injectable,
-  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateOrderDto } from './dto/create-order.dto';
+import { CheckoutDto } from './dto/checkout.dto';
 
 @Injectable()
 export class OrderService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createOrder(userId: number, data: CreateOrderDto) {
-    return this.prisma.$transaction(async (tx) => {
-      const cart = await tx.cart.findUnique({
-        where: { userId },
-        include: {
-          items: {
-            include: {
-              variant: {
-                include: {
-                  product: {
-                    include: {
-                      brand: true,
-                      category: true,
-                      images: {
-                        orderBy: [
-                          { isPrimary: 'desc' },
-                          { sortOrder: 'asc' },
-                          { id: 'asc' },
-                        ],
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            orderBy: {
-              id: 'asc',
-            },
-          },
-        },
-      });
+  private getFinalPrice(
+    price: Prisma.Decimal,
+    salePrice?: Prisma.Decimal | null,
+  ) {
+    const originalPrice = Number(price);
+    const discountPrice = salePrice ? Number(salePrice) : null;
 
-      if (!cart || cart.items.length === 0) {
-        throw new BadRequestException('Cart is empty');
-      }
+    const finalPrice =
+      discountPrice && discountPrice > 0 && discountPrice < originalPrice
+        ? discountPrice
+        : originalPrice;
 
-      const address = data.addressId
-        ? await tx.address.findFirst({
-            where: {
-              id: data.addressId,
-              userId,
-              isActive: true,
-            },
-          })
-        : await tx.address.findFirst({
-            where: {
-              userId,
-              isActive: true,
-              isDefault: true,
-            },
-          });
+    const discountAmount = originalPrice - finalPrice;
 
-      if (!address) {
-        throw new BadRequestException('Valid address is required');
-      }
+    const discountPercent =
+      discountAmount > 0
+        ? Math.round((discountAmount / originalPrice) * 100)
+        : 0;
 
-      for (const item of cart.items) {
-        if (!item.variant.isActive || !item.variant.product.isActive) {
-          throw new BadRequestException(
-            `Product variant ${item.variantId} is not active`,
-          );
-        }
-
-        if (item.variant.stock < item.quantity) {
-          throw new BadRequestException(
-            `Not enough stock for variant ${item.variantId}`,
-          );
-        }
-      }
-
-      const orderItems = cart.items.map((item) => {
-        const unitPrice =
-          item.variant.salePrice !== null &&
-          item.variant.salePrice !== undefined
-            ? Number(item.variant.salePrice)
-            : Number(item.variant.price);
-
-        return {
-          variantId: item.variantId,
-          quantity: item.quantity,
-          price: unitPrice,
-          lineTotal: unitPrice * item.quantity,
-        };
-      });
-
-      const total = orderItems.reduce(
-        (sum, item) => sum + item.lineTotal,
-        0,
-      );
-
-      const order = await tx.order.create({
-        data: {
-          userId,
-          addressId: address.id,
-
-          total,
-          status: OrderStatus.pending,
-
-          shippingReceiverName: address.receiverName,
-          shippingReceiverMobile: address.receiverMobile,
-          shippingProvince: address.province,
-          shippingCity: address.city,
-          shippingAddressLine: address.addressLine,
-          shippingPostalCode: address.postalCode,
-          shippingPlaque: address.plaque,
-          shippingUnit: address.unit,
-
-          items: {
-            create: orderItems.map((item) => ({
-              variantId: item.variantId,
-              quantity: item.quantity,
-              price: item.price,
-            })),
-          },
-        },
-        select: this.orderSelect(),
-      });
-
-      for (const item of cart.items) {
-        await tx.productVariant.update({
-          where: { id: item.variantId },
-          data: {
-            stock: {
-              decrement: item.quantity,
-            },
-          },
-        });
-      }
-
-      await tx.cartItem.deleteMany({
-        where: {
-          cartId: cart.id,
-        },
-      });
-
-      return this.formatOrder(order);
-    });
-  }
-
-  async getOrders(userId: number) {
-    const orders = await this.prisma.order.findMany({
-      where: { userId },
-      select: this.orderSelect(),
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
-
-    return orders.map((order) => this.formatOrder(order));
-  }
-
-  async getOrderById(id: number, userId: number) {
-    const order = await this.prisma.order.findFirst({
-      where: {
-        id,
-        userId,
-      },
-      select: this.orderSelect(),
-    });
-
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
-
-    return this.formatOrder(order);
-  }
-
-  async getAllOrdersForAdmin() {
-    try {
-      const orders = await this.prisma.order.findMany({
-        select: this.adminOrderSelect(),
-        orderBy: {
-          createdAt: 'desc',
-        },
-      });
-
-      return orders.map((order) => this.formatOrder(order));
-    } catch (error) {
-      console.error('GET_ALL_ORDERS_FOR_ADMIN_ERROR:', error);
-
-      throw new InternalServerErrorException(
-        'Failed to get admin orders',
-      );
-    }
-  }
-
-  async getOrderByIdForAdmin(id: number) {
-    try {
-      const order = await this.prisma.order.findUnique({
-        where: { id },
-        select: this.adminOrderSelect(),
-      });
-
-      if (!order) {
-        throw new NotFoundException('Order not found');
-      }
-
-      return this.formatOrder(order);
-    } catch (error) {
-      console.error('GET_ORDER_BY_ID_FOR_ADMIN_ERROR:', error);
-
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-
-      throw new InternalServerErrorException(
-        'Failed to get admin order',
-      );
-    }
-  }
-
-  async updateOrderStatus(id: number, status: OrderStatus) {
-    try {
-      const order = await this.prisma.order.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          status: true,
-        },
-      });
-
-      if (!order) {
-        throw new NotFoundException('Order not found');
-      }
-
-      await this.prisma.order.update({
-        where: { id },
-        data: {
-          status,
-        },
-      });
-
-      return this.getOrderByIdForAdmin(id);
-    } catch (error) {
-      console.error('UPDATE_ORDER_STATUS_ERROR:', error);
-
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-
-      throw new InternalServerErrorException(
-        'Failed to update order status',
-      );
-    }
-  }
-
-  private orderSelect() {
     return {
-      id: true,
-      userId: true,
-      addressId: true,
-      status: true,
-      total: true,
-      authority: true,
-
-      shippingReceiverName: true,
-      shippingReceiverMobile: true,
-      shippingProvince: true,
-      shippingCity: true,
-      shippingAddressLine: true,
-      shippingPostalCode: true,
-      shippingPlaque: true,
-      shippingUnit: true,
-
-      createdAt: true,
-      updatedAt: true,
-
-      address: true,
-
-      items: {
-        select: {
-          id: true,
-          quantity: true,
-          price: true,
-          variant: {
-            select: {
-              id: true,
-              title: true,
-              sku: true,
-              volume: true,
-              barcode: true,
-              product: {
-                select: {
-                  id: true,
-                  name: true,
-                  englishName: true,
-                  slug: true,
-                  brand: true,
-                  category: true,
-                  images: {
-                    orderBy: [
-                      { isPrimary: 'desc' as const },
-                      { sortOrder: 'asc' as const },
-                      { id: 'asc' as const },
-                    ],
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    };
-  }
-
-  private adminOrderSelect() {
-    return {
-      ...this.orderSelect(),
-      user: {
-        select: {
-          id: true,
-          fullName: true,
-          mobile: true,
-          email: true,
-          role: true,
-        },
-      },
+      originalPrice,
+      salePrice: discountPrice,
+      finalPrice,
+      discountAmount,
+      discountPercent,
+      hasDiscount: discountPercent > 0,
     };
   }
 
   private formatOrder(order: any) {
-    const items = order.items.map((item) => {
-      const variant = item.variant;
-      const product = variant?.product;
-
-      const primaryImage =
-        product?.images?.find((image) => image.isPrimary) ??
-        product?.images?.[0] ??
-        null;
-
-      const unitPrice = Number(item.price);
-      const lineTotal = unitPrice * item.quantity;
-
-      return {
+    const items =
+      order.items?.map((item: any) => ({
         id: item.id,
+        productId: item.productId,
+        variantId: item.variantId,
+
+        productName: item.productName,
+        variantTitle: item.variantTitle,
+        sku: item.sku,
+
+        price: Number(item.price),
         quantity: item.quantity,
-        unitPrice,
-        lineTotal,
-        variant: variant
+        total: Number(item.total),
+
+        product: item.product
           ? {
-              id: variant.id,
-              title: variant.title,
-              sku: variant.sku,
-              volume: variant.volume,
-              barcode: variant.barcode,
+              id: item.product.id,
+              name: item.product.name,
+              englishName: item.product.englishName,
+              slug: item.product.slug,
+              shortDesc: item.product.shortDesc,
             }
           : null,
-        product: product
+
+        variant: item.variant
           ? {
-              id: product.id,
-              name: product.name,
-              englishName: product.englishName,
-              slug: product.slug,
-              image: primaryImage,
-              brand: product.brand,
-              category: product.category,
+              id: item.variant.id,
+              title: item.variant.title,
+              sku: item.variant.sku,
+              volume: item.variant.volume,
+              barcode: item.variant.barcode,
             }
           : null,
-      };
-    });
+
+        createdAt: item.createdAt,
+      })) || [];
 
     return {
       id: order.id,
       userId: order.userId,
-      user: order.user ?? undefined,
-
       addressId: order.addressId,
-      address: order.address ?? null,
+
+      status: order.status,
+      total: Number(order.total),
+
+      authority: order.authority,
 
       shipping: {
         receiverName: order.shippingReceiverName,
@@ -393,15 +100,274 @@ export class OrderService {
         unit: order.shippingUnit,
       },
 
-      status: order.status,
-      total: Number(order.total),
-      itemCount: items.reduce(
-        (sum, item) => sum + item.quantity,
-        0,
-      ),
       items,
+
+      summary: {
+        itemCount: items.length,
+        totalQuantity: items.reduce(
+          (sum: number, item: any) => sum + item.quantity,
+          0,
+        ),
+        total: Number(order.total),
+      },
+
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
     };
+  }
+
+  private getOrderInclude() {
+    return {
+      items: {
+        orderBy: {
+          id: 'asc' as const,
+        },
+        include: {
+          product: true,
+          variant: true,
+        },
+      },
+      address: true,
+    };
+  }
+
+  async checkout(userId: number, dto: CheckoutDto) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const cart = await tx.cart.findUnique({
+        where: {
+          userId,
+        },
+        include: {
+          items: {
+            orderBy: {
+              id: 'asc',
+            },
+            include: {
+              variant: {
+                include: {
+                  product: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!cart || !cart.items.length) {
+        throw new BadRequestException('سبد خرید خالی است');
+      }
+
+      let addressSnapshot: {
+        addressId: number | null;
+        shippingReceiverName: string | null;
+        shippingReceiverMobile: string | null;
+        shippingProvince: string | null;
+        shippingCity: string | null;
+        shippingAddressLine: string | null;
+        shippingPostalCode: string | null;
+        shippingPlaque: string | null;
+        shippingUnit: string | null;
+      } = {
+        addressId: null,
+        shippingReceiverName: dto.shippingReceiverName?.trim() || null,
+        shippingReceiverMobile: dto.shippingReceiverMobile?.trim() || null,
+        shippingProvince: dto.shippingProvince?.trim() || null,
+        shippingCity: dto.shippingCity?.trim() || null,
+        shippingAddressLine: dto.shippingAddressLine?.trim() || null,
+        shippingPostalCode: dto.shippingPostalCode?.trim() || null,
+        shippingPlaque: dto.shippingPlaque?.trim() || null,
+        shippingUnit: dto.shippingUnit?.trim() || null,
+      };
+
+      if (dto.addressId) {
+        const address = await tx.address.findFirst({
+          where: {
+            id: dto.addressId,
+            userId,
+            isActive: true,
+          },
+        });
+
+        if (!address) {
+          throw new NotFoundException('آدرس انتخاب‌شده پیدا نشد');
+        }
+
+        addressSnapshot = {
+          addressId: address.id,
+          shippingReceiverName: address.receiverName,
+          shippingReceiverMobile: address.receiverMobile,
+          shippingProvince: address.province,
+          shippingCity: address.city,
+          shippingAddressLine: address.addressLine,
+          shippingPostalCode: address.postalCode,
+          shippingPlaque: address.plaque,
+          shippingUnit: address.unit,
+        };
+      }
+
+      const orderItemsData: Prisma.OrderItemCreateWithoutOrderInput[] = [];
+      let orderTotal = 0;
+
+      for (const cartItem of cart.items) {
+        const variant = cartItem.variant;
+        const product = variant.product;
+
+        if (!product || !product.isActive) {
+          throw new BadRequestException(
+            `محصول ${product?.name || ''} فعال نیست`,
+          );
+        }
+
+        if (!variant.isActive) {
+          throw new BadRequestException(
+            `تنوع ${variant.title} فعال نیست`,
+          );
+        }
+
+        if (variant.stock < cartItem.quantity) {
+          throw new BadRequestException(
+            `موجودی محصول ${product.name} کافی نیست. موجودی فعلی: ${variant.stock}`,
+          );
+        }
+
+        const priceInfo = this.getFinalPrice(variant.price, variant.salePrice);
+        const lineTotal = priceInfo.finalPrice * cartItem.quantity;
+        orderTotal += lineTotal;
+
+        orderItemsData.push({
+          product: {
+            connect: {
+              id: product.id,
+            },
+          },
+          variant: {
+            connect: {
+              id: variant.id,
+            },
+          },
+          productName: product.name,
+          variantTitle: variant.title,
+          sku: variant.sku,
+          price: new Prisma.Decimal(priceInfo.finalPrice),
+          quantity: cartItem.quantity,
+          total: new Prisma.Decimal(lineTotal),
+        });
+      }
+
+      const order = await tx.order.create({
+        data: {
+          user: {
+            connect: {
+              id: userId,
+            },
+          },
+          address: addressSnapshot.addressId
+            ? {
+                connect: {
+                  id: addressSnapshot.addressId,
+                },
+              }
+            : undefined,
+
+          status: OrderStatus.pending,
+          total: new Prisma.Decimal(orderTotal),
+
+          shippingReceiverName: addressSnapshot.shippingReceiverName,
+          shippingReceiverMobile: addressSnapshot.shippingReceiverMobile,
+          shippingProvince: addressSnapshot.shippingProvince,
+          shippingCity: addressSnapshot.shippingCity,
+          shippingAddressLine: addressSnapshot.shippingAddressLine,
+          shippingPostalCode: addressSnapshot.shippingPostalCode,
+          shippingPlaque: addressSnapshot.shippingPlaque,
+          shippingUnit: addressSnapshot.shippingUnit,
+
+          items: {
+            create: orderItemsData,
+          },
+        },
+      });
+
+      for (const cartItem of cart.items) {
+        const stockUpdate = await tx.productVariant.updateMany({
+          where: {
+            id: cartItem.variantId,
+            isActive: true,
+            stock: {
+              gte: cartItem.quantity,
+            },
+          },
+          data: {
+            stock: {
+              decrement: cartItem.quantity,
+            },
+          },
+        });
+
+        if (stockUpdate.count !== 1) {
+          throw new BadRequestException(
+            `موجودی یکی از محصولات برای ثبت سفارش کافی نیست`,
+          );
+        }
+      }
+
+      await tx.cartItem.deleteMany({
+        where: {
+          cartId: cart.id,
+        },
+      });
+
+      const fullOrder = await tx.order.findUnique({
+        where: {
+          id: order.id,
+        },
+        include: this.getOrderInclude(),
+      });
+
+      if (!fullOrder) {
+        throw new NotFoundException('سفارش ساخته شد اما پیدا نشد');
+      }
+
+      return fullOrder;
+    });
+
+    return {
+      message: 'سفارش با موفقیت ثبت شد',
+      order: this.formatOrder(result),
+    };
+  }
+
+  async getMyOrders(userId: number) {
+    const orders = await this.prisma.order.findMany({
+      where: {
+        userId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: this.getOrderInclude(),
+    });
+
+    return {
+      data: orders.map((order) => this.formatOrder(order)),
+      meta: {
+        total: orders.length,
+      },
+    };
+  }
+
+  async getMyOrderById(userId: number, orderId: number) {
+    const order = await this.prisma.order.findFirst({
+      where: {
+        id: orderId,
+        userId,
+      },
+      include: this.getOrderInclude(),
+    });
+
+    if (!order) {
+      throw new NotFoundException('سفارش پیدا نشد');
+    }
+
+    return this.formatOrder(order);
   }
 }
