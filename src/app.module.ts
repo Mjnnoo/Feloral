@@ -1,3 +1,4 @@
+import { InventoryModule } from './inventory/inventory.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -31,6 +32,8 @@ import { AiAdvisorModule } from './ai-advisor/ai-advisor.module';
 import { VirtualTryOnModule } from './virtual-try-on/virtual-try-on.module';
 
 import { PriceIntelligenceModule } from './price-intelligence/price-intelligence.module';
+import { ProductBulkModule } from './product-bulk/product-bulk.module';
+import { CatalogModule } from './catalog/catalog.module';
 
 @Module({
   imports: [
@@ -68,6 +71,11 @@ import { PriceIntelligenceModule } from './price-intelligence/price-intelligence
     VirtualTryOnModule,
 
     PriceIntelligenceModule,
+
+    ProductBulkModule,
+
+    CatalogModule,
+    InventoryModule,
   ],
 })
 export class AppModule {}
