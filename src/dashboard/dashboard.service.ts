@@ -7,33 +7,160 @@ import { PrismaService } from '../prisma/prisma.service';
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getStats() {
-    const now = new Date();
+  private toNumber(
+    value: unknown,
+    fallback: number,
+    min?: number,
+    max?: number,
+  ): number {
+    const number = Number(value);
 
+    if (Number.isNaN(number) || number <= 0) {
+      return fallback;
+    }
+
+    if (min !== undefined && number < min) {
+      return min;
+    }
+
+    if (max !== undefined && number > max) {
+      return max;
+    }
+
+    return number;
+  }
+
+  private getStartOfToday() {
+    const now = new Date();
     const startOfToday = new Date(now);
+
     startOfToday.setHours(0, 0, 0, 0);
 
-    const startOfMonth = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      1,
-    );
+    return startOfToday;
+  }
 
-    const revenueStatuses: OrderStatus[] = [
+  private getStartOfMonth() {
+    const now = new Date();
+
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+
+  private getRevenueStatuses(): OrderStatus[] {
+    return [
       OrderStatus.paid,
       OrderStatus.processing,
       OrderStatus.shipped,
       OrderStatus.delivered,
     ];
+  }
+
+  private toMoney(value: unknown): number {
+    if (value === null || value === undefined) {
+      return 0;
+    }
+
+    return Number(value);
+  }
+
+  private getDateKey(date: Date) {
+    return date.toISOString().slice(0, 10);
+  }
+
+  private formatRecentOrder(order: any) {
+    return {
+      id: order.id,
+      userId: order.userId,
+
+      user: order.user
+        ? {
+            id: order.user.id,
+            fullName: order.user.fullName,
+            mobile: order.user.mobile,
+            email: order.user.email,
+          }
+        : null,
+
+      status: order.status,
+      total: Number(order.total),
+      itemsCount: order._count?.items ?? 0,
+
+      shipping: {
+        receiverName: order.shippingReceiverName,
+        receiverMobile: order.shippingReceiverMobile,
+        province: order.shippingProvince,
+        city: order.shippingCity,
+      },
+
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+    };
+  }
+
+  private formatLowStockVariant(variant: any) {
+    const primaryImage = variant.product?.images?.[0] ?? null;
+
+    return {
+      id: variant.id,
+      title: variant.title,
+      sku: variant.sku,
+      volume: variant.volume,
+      barcode: variant.barcode,
+      stock: variant.stock,
+      isActive: variant.isActive,
+
+      price: Number(variant.price),
+      salePrice:
+        variant.salePrice !== null && variant.salePrice !== undefined
+          ? Number(variant.salePrice)
+          : null,
+
+      product: variant.product
+        ? {
+            id: variant.product.id,
+            name: variant.product.name,
+            englishName: variant.product.englishName,
+            slug: variant.product.slug,
+            image: primaryImage,
+
+            brand: variant.product.brand
+              ? {
+                  id: variant.product.brand.id,
+                  name: variant.product.brand.name,
+                  slug: variant.product.brand.slug,
+                }
+              : null,
+
+            category: variant.product.category
+              ? {
+                  id: variant.product.category.id,
+                  name: variant.product.category.name,
+                  slug: variant.product.category.slug,
+                }
+              : null,
+          }
+        : null,
+    };
+  }
+
+  async getAdminSummary() {
+    const startOfToday = this.getStartOfToday();
+    const startOfMonth = this.getStartOfMonth();
+    const revenueStatuses = this.getRevenueStatuses();
 
     const [
       usersCount,
+      activeUsersCount,
+
+      brandsCount,
+      categoriesCount,
+
       productsCount,
       activeProductsCount,
       variantsCount,
+      activeVariantsCount,
       lowStockVariantsCount,
-      ordersCount,
 
+      ordersCount,
       todayOrdersCount,
       monthOrdersCount,
 
@@ -49,6 +176,7 @@ export class DashboardService {
       revenueAggregate,
       todayRevenueAggregate,
       monthRevenueAggregate,
+      averageOrderAggregate,
 
       paidRevenueAggregate,
       processingRevenueAggregate,
@@ -60,6 +188,16 @@ export class DashboardService {
     ] = await Promise.all([
       this.prisma.user.count(),
 
+      this.prisma.user.count({
+        where: {
+          isActive: true,
+        },
+      }),
+
+      this.prisma.brand.count(),
+
+      this.prisma.category.count(),
+
       this.prisma.product.count(),
 
       this.prisma.product.count({
@@ -69,6 +207,12 @@ export class DashboardService {
       }),
 
       this.prisma.productVariant.count(),
+
+      this.prisma.productVariant.count({
+        where: {
+          isActive: true,
+        },
+      }),
 
       this.prisma.productVariant.count({
         where: {
@@ -185,6 +329,17 @@ export class DashboardService {
 
       this.prisma.order.aggregate({
         where: {
+          status: {
+            in: revenueStatuses,
+          },
+        },
+        _avg: {
+          total: true,
+        },
+      }),
+
+      this.prisma.order.aggregate({
+        where: {
           status: OrderStatus.paid,
         },
         _sum: {
@@ -220,7 +375,7 @@ export class DashboardService {
       }),
 
       this.prisma.order.findMany({
-        take: 5,
+        take: 8,
         orderBy: {
           createdAt: 'desc',
         },
@@ -229,7 +384,15 @@ export class DashboardService {
           userId: true,
           status: true,
           total: true,
+
+          shippingReceiverName: true,
+          shippingReceiverMobile: true,
+          shippingProvince: true,
+          shippingCity: true,
+
           createdAt: true,
+          updatedAt: true,
+
           user: {
             select: {
               id: true,
@@ -238,6 +401,7 @@ export class DashboardService {
               email: true,
             },
           },
+
           _count: {
             select: {
               items: true,
@@ -260,16 +424,20 @@ export class DashboardService {
           id: true,
           title: true,
           sku: true,
+          volume: true,
+          barcode: true,
           stock: true,
           price: true,
           salePrice: true,
           isActive: true,
+
           product: {
             select: {
               id: true,
               name: true,
               englishName: true,
               slug: true,
+
               brand: {
                 select: {
                   id: true,
@@ -277,6 +445,7 @@ export class DashboardService {
                   slug: true,
                 },
               },
+
               category: {
                 select: {
                   id: true,
@@ -284,11 +453,18 @@ export class DashboardService {
                   slug: true,
                 },
               },
+
               images: {
                 orderBy: [
-                  { isPrimary: 'desc' },
-                  { sortOrder: 'asc' },
-                  { id: 'asc' },
+                  {
+                    isPrimary: 'desc',
+                  },
+                  {
+                    sortOrder: 'asc',
+                  },
+                  {
+                    id: 'asc',
+                  },
                 ],
                 take: 1,
               },
@@ -301,25 +477,48 @@ export class DashboardService {
     return {
       overview: {
         usersCount,
+        activeUsersCount,
+
+        brandsCount,
+        categoriesCount,
+
         productsCount,
         activeProductsCount,
         variantsCount,
+        activeVariantsCount,
         lowStockVariantsCount,
+
         ordersCount,
-        totalRevenue: Number(revenueAggregate._sum.total ?? 0),
+      },
+
+      revenue: {
+        totalRevenue: this.toMoney(revenueAggregate._sum.total),
+        todayRevenue: this.toMoney(todayRevenueAggregate._sum.total),
+        monthRevenue: this.toMoney(monthRevenueAggregate._sum.total),
+        averageOrderValue: this.toMoney(averageOrderAggregate._avg.total),
+
+        byStatus: {
+          paid: this.toMoney(paidRevenueAggregate._sum.total),
+          processing: this.toMoney(processingRevenueAggregate._sum.total),
+          shipped: this.toMoney(shippedRevenueAggregate._sum.total),
+          delivered: this.toMoney(deliveredRevenueAggregate._sum.total),
+        },
+
+        revenueStatuses,
       },
 
       today: {
         ordersCount: todayOrdersCount,
-        revenue: Number(todayRevenueAggregate._sum.total ?? 0),
+        revenue: this.toMoney(todayRevenueAggregate._sum.total),
       },
 
       month: {
         ordersCount: monthOrdersCount,
-        revenue: Number(monthRevenueAggregate._sum.total ?? 0),
+        revenue: this.toMoney(monthRevenueAggregate._sum.total),
       },
 
       orders: {
+        total: ordersCount,
         pending: pendingOrdersCount,
         paid: paidOrdersCount,
         processing: processingOrdersCount,
@@ -330,44 +529,238 @@ export class DashboardService {
         failed: failedOrdersCount,
       },
 
-      revenueByStatus: {
-        paid: Number(paidRevenueAggregate._sum.total ?? 0),
-        processing: Number(processingRevenueAggregate._sum.total ?? 0),
-        shipped: Number(shippedRevenueAggregate._sum.total ?? 0),
-        delivered: Number(deliveredRevenueAggregate._sum.total ?? 0),
-      },
+      recentOrders: recentOrders.map((order) => this.formatRecentOrder(order)),
 
-      recentOrders: recentOrders.map((order) => ({
-        id: order.id,
-        userId: order.userId,
-        user: order.user,
-        status: order.status,
-        total: Number(order.total),
-        itemsCount: order._count.items,
-        createdAt: order.createdAt,
-      })),
+      lowStockVariants: lowStockVariants.map((variant) =>
+        this.formatLowStockVariant(variant),
+      ),
+    };
+  }
 
-      lowStockVariants: lowStockVariants.map((variant) => ({
-        id: variant.id,
-        title: variant.title,
-        sku: variant.sku,
-        stock: variant.stock,
-        price: Number(variant.price),
-        salePrice:
-          variant.salePrice !== null && variant.salePrice !== undefined
-            ? Number(variant.salePrice)
-            : null,
-        isActive: variant.isActive,
-        product: {
-          id: variant.product.id,
-          name: variant.product.name,
-          englishName: variant.product.englishName,
-          slug: variant.product.slug,
-          image: variant.product.images[0] ?? null,
-          brand: variant.product.brand,
-          category: variant.product.category,
+  async getSalesStats(daysValue?: string) {
+    const days = this.toNumber(daysValue, 7, 1, 90);
+    const revenueStatuses = this.getRevenueStatuses();
+
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - (days - 1));
+    startDate.setHours(0, 0, 0, 0);
+
+    const orders = await this.prisma.order.findMany({
+      where: {
+        createdAt: {
+          gte: startDate,
         },
-      })),
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+      select: {
+        id: true,
+        status: true,
+        total: true,
+        createdAt: true,
+      },
+    });
+
+    const salesMap = new Map<
+      string,
+      {
+        date: string;
+        ordersCount: number;
+        revenueOrdersCount: number;
+        revenue: number;
+        pendingOrdersCount: number;
+        paidOrdersCount: number;
+        failedOrdersCount: number;
+      }
+    >();
+
+    for (let index = 0; index < days; index++) {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + index);
+
+      const key = this.getDateKey(date);
+
+      salesMap.set(key, {
+        date: key,
+        ordersCount: 0,
+        revenueOrdersCount: 0,
+        revenue: 0,
+        pendingOrdersCount: 0,
+        paidOrdersCount: 0,
+        failedOrdersCount: 0,
+      });
+    }
+
+    for (const order of orders) {
+      const key = this.getDateKey(order.createdAt);
+      const row = salesMap.get(key);
+
+      if (!row) {
+        continue;
+      }
+
+      row.ordersCount += 1;
+
+      if (revenueStatuses.includes(order.status)) {
+        row.revenueOrdersCount += 1;
+        row.revenue += Number(order.total);
+      }
+
+      if (order.status === OrderStatus.pending) {
+        row.pendingOrdersCount += 1;
+      }
+
+      if (order.status === OrderStatus.paid) {
+        row.paidOrdersCount += 1;
+      }
+
+      if (order.status === OrderStatus.failed) {
+        row.failedOrdersCount += 1;
+      }
+    }
+
+    const data = Array.from(salesMap.values());
+
+    return {
+      days,
+      from: this.getDateKey(startDate),
+      to: this.getDateKey(new Date()),
+      revenueStatuses,
+      data,
+      summary: {
+        ordersCount: data.reduce((sum, item) => sum + item.ordersCount, 0),
+        revenueOrdersCount: data.reduce(
+          (sum, item) => sum + item.revenueOrdersCount,
+          0,
+        ),
+        revenue: data.reduce((sum, item) => sum + item.revenue, 0),
+      },
+    };
+  }
+
+  async getLatestOrders(limitValue?: string) {
+    const limit = this.toNumber(limitValue, 10, 1, 50);
+
+    const orders = await this.prisma.order.findMany({
+      take: limit,
+      orderBy: {
+        createdAt: 'desc',
+      },
+      select: {
+        id: true,
+        userId: true,
+        status: true,
+        total: true,
+
+        shippingReceiverName: true,
+        shippingReceiverMobile: true,
+        shippingProvince: true,
+        shippingCity: true,
+
+        createdAt: true,
+        updatedAt: true,
+
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            mobile: true,
+            email: true,
+          },
+        },
+
+        _count: {
+          select: {
+            items: true,
+          },
+        },
+      },
+    });
+
+    return {
+      data: orders.map((order) => this.formatRecentOrder(order)),
+      meta: {
+        total: orders.length,
+        limit,
+      },
+    };
+  }
+
+  async getLowStock(thresholdValue?: string, limitValue?: string) {
+    const threshold = this.toNumber(thresholdValue, 5, 0, 1000);
+    const limit = this.toNumber(limitValue, 20, 1, 100);
+
+    const variants = await this.prisma.productVariant.findMany({
+      where: {
+        stock: {
+          lte: threshold,
+        },
+      },
+      take: limit,
+      orderBy: {
+        stock: 'asc',
+      },
+      select: {
+        id: true,
+        title: true,
+        sku: true,
+        volume: true,
+        barcode: true,
+        stock: true,
+        price: true,
+        salePrice: true,
+        isActive: true,
+
+        product: {
+          select: {
+            id: true,
+            name: true,
+            englishName: true,
+            slug: true,
+
+            brand: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+              },
+            },
+
+            category: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+              },
+            },
+
+            images: {
+              orderBy: [
+                {
+                  isPrimary: 'desc',
+                },
+                {
+                  sortOrder: 'asc',
+                },
+                {
+                  id: 'asc',
+                },
+              ],
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    return {
+      data: variants.map((variant) => this.formatLowStockVariant(variant)),
+      meta: {
+        threshold,
+        limit,
+        total: variants.length,
+      },
     };
   }
 }
