@@ -1,6 +1,9 @@
 import {
   Body,
   Controller,
+  Get,
+  Param,
+  ParseIntPipe,
   Post,
   Query,
   UseGuards,
@@ -24,18 +27,61 @@ export class PaymentController {
 
   @UseGuards(JwtAuthGuard)
   @Post('request')
-  request(
-    @Body() dto: CreatePaymentDto,
-    @User() user: AuthUser,
-  ) {
+  requestWithBody(@Body() dto: CreatePaymentDto, @User() user: AuthUser) {
     return this.paymentService.createPayment(dto.orderId, user.id);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Post('request/:orderId')
+  requestWithParam(
+    @Param('orderId', ParseIntPipe) orderId: number,
+    @User() user: AuthUser,
+  ) {
+    return this.paymentService.createPayment(orderId, user.id);
+  }
+
   @Post('verify')
-  verify(
+  verifyWithPost(
     @Query('Authority') authority: string,
+    @Query('Status') queryStatus: string,
     @Body() dto: VerifyPaymentDto,
   ) {
-    return this.paymentService.verifyPayment(authority, dto.orderId);
+    return this.paymentService.verifyPayment(
+      authority,
+      dto.orderId,
+      dto.status || queryStatus,
+    );
+  }
+
+  @Get('verify')
+  verifyWithGet(
+    @Query('Authority') authority: string,
+    @Query('Status') status: string,
+    @Query('orderId') orderId: string,
+  ) {
+    return this.paymentService.verifyPayment(
+      authority,
+      Number(orderId),
+      status,
+    );
+  }
+
+  @Get('mock-pay')
+  mockPay(
+    @Query('Authority') authority: string,
+    @Query('orderId') orderId: string,
+    @Query('Status') status?: string,
+  ) {
+    return this.paymentService.verifyPayment(
+      authority,
+      Number(orderId),
+      status || 'OK',
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('my-payments')
+  getMyPayments(@User() user: AuthUser) {
+    return this.paymentService.getMyPayments(user.id);
   }
 }
