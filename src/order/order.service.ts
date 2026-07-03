@@ -29,7 +29,7 @@ export class OrderService {
 
   private toNumber(value: unknown, fallback: number): number {
     const number = Number(value);
-    return Number.isNaN(number) || number <= 0 ? fallback : number;
+    return Number.isNaN(number) || number < 0 ? fallback : number;
   }
 
   private normalizeCouponCode(code?: string | null) {
@@ -55,6 +55,34 @@ export class OrderService {
     }
 
     return shippingCosts[provider] ?? 0;
+  }
+
+  private isCustomerSelectableShippingProvider(provider: ShippingProvider) {
+    const allowedProviders: ShippingProvider[] = [
+      ShippingProvider.post,
+      ShippingProvider.tipax,
+      ShippingProvider.alopeyk,
+      ShippingProvider.snapp,
+      ShippingProvider.tapsi,
+      ShippingProvider.courier,
+    ];
+
+    return allowedProviders.includes(provider);
+  }
+
+  private getShippingProviderDescription(provider: ShippingProvider) {
+    const descriptions: Record<ShippingProvider, string> = {
+      post: 'ارسال اقتصادی و مناسب برای بیشتر شهرها',
+      tipax: 'ارسال سریع‌تر برای شهرهای تحت پوشش تیپاکس',
+      alopeyk: 'ارسال فوری درون‌شهری با الوپیک',
+      snapp: 'ارسال فوری درون‌شهری با اسنپ',
+      tapsi: 'ارسال فوری درون‌شهری با تپسی',
+      courier: 'ارسال با پیک اختصاصی فروشگاه',
+      free: 'ارسال رایگان',
+      other: 'روش ارسال متفرقه',
+    };
+
+    return descriptions[provider] || null;
   }
 
   private getFinalPrice(
@@ -570,6 +598,41 @@ export class OrderService {
     if (!status) return '-';
 
     return labels[status] || status;
+  }
+
+  getShippingMethods(subtotal?: string) {
+    const normalizedSubtotal = this.toNumber(subtotal, 0);
+
+    const providers: ShippingProvider[] = [
+      ShippingProvider.post,
+      ShippingProvider.tipax,
+      ShippingProvider.alopeyk,
+      ShippingProvider.snapp,
+      ShippingProvider.tapsi,
+      ShippingProvider.courier,
+    ];
+
+    const data = providers.map((provider) => {
+      const cost = this.calculateShippingCost(provider, normalizedSubtotal);
+
+      return {
+        provider,
+        title: this.getShippingProviderLabel(provider),
+        description: this.getShippingProviderDescription(provider),
+        cost,
+        costText: this.formatMoney(cost),
+        isFree: cost === 0,
+        isAvailable: true,
+      };
+    });
+
+    return {
+      data,
+      meta: {
+        subtotal: normalizedSubtotal,
+        defaultProvider: ShippingProvider.post,
+      },
+    };
   }
 
   private buildInvoicePrintHtml(invoiceData: any) {
@@ -1420,6 +1483,12 @@ export class OrderService {
 
       const selectedShippingProvider =
         dto.shippingProvider || ShippingProvider.post;
+
+      if (!this.isCustomerSelectableShippingProvider(selectedShippingProvider)) {
+        throw new BadRequestException(
+          'روش ارسال انتخاب‌شده برای ثبت سفارش معتبر نیست',
+        );
+      }
 
       const shippingCost = this.calculateShippingCost(
         selectedShippingProvider,

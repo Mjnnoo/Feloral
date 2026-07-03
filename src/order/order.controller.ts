@@ -1,4 +1,3 @@
-import { UpdateOrderShippingDto } from './dto/update-order-shipping.dto';
 import {
   Body,
   Controller,
@@ -16,6 +15,7 @@ import type { Response } from 'express';
 import { OrderService } from './order.service';
 import { CheckoutDto } from './dto/checkout.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { UpdateOrderShippingDto } from './dto/update-order-shipping.dto';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles/roles.guard';
@@ -33,6 +33,11 @@ type AuthUser = {
 @UseGuards(JwtAuthGuard)
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
+
+  @Get('shipping-methods')
+  getShippingMethods(@Query('subtotal') subtotal?: string) {
+    return this.orderService.getShippingMethods(subtotal);
+  }
 
   @Post('checkout')
   checkout(@User() user: AuthUser, @Body() dto: CheckoutDto) {
@@ -70,11 +75,10 @@ export class OrderController {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="${pdf.fileName}"`,
+      `inline; filename="${pdf.fileName}"`,
     );
-    res.setHeader('Content-Length', pdf.buffer.length);
 
-    return res.end(pdf.buffer);
+    return res.send(pdf.buffer);
   }
 
   @Get('my-orders/:id/invoice')
@@ -94,24 +98,22 @@ export class OrderController {
   }
 
   @Get('admin/orders')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   getAdminOrders(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-    @Query('status') status?: string,
-    @Query('search') search?: string,
+    @Query()
+    query: {
+      page?: string;
+      limit?: string;
+      status?: string;
+      search?: string;
+    },
   ) {
-    return this.orderService.getAdminOrders({
-      page,
-      limit,
-      status,
-      search,
-    });
+    return this.orderService.getAdminOrders(query);
   }
 
   @Get('admin/orders/:id/invoice/print')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   async getAdminOrderInvoicePrint(
     @Param('id', ParseIntPipe) orderId: number,
@@ -124,7 +126,7 @@ export class OrderController {
   }
 
   @Get('admin/orders/:id/invoice/pdf')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   async getAdminOrderInvoicePdf(
     @Param('id', ParseIntPipe) orderId: number,
@@ -135,37 +137,38 @@ export class OrderController {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="${pdf.fileName}"`,
+      `inline; filename="${pdf.fileName}"`,
     );
-    res.setHeader('Content-Length', pdf.buffer.length);
 
-    return res.end(pdf.buffer);
+    return res.send(pdf.buffer);
   }
 
   @Get('admin/orders/:id/invoice')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   getAdminOrderInvoice(@Param('id', ParseIntPipe) orderId: number) {
     return this.orderService.getAdminOrderInvoice(orderId);
   }
 
   @Get('admin/orders/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   getAdminOrderById(@Param('id', ParseIntPipe) orderId: number) {
     return this.orderService.getAdminOrderById(orderId);
   }
+
   @Patch('admin/orders/:id/shipping')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN, Role.SUPER_ADMIN)
-updateAdminOrderShipping(
-  @Param('id', ParseIntPipe) orderId: number,
-  @Body() dto: UpdateOrderShippingDto,
-) {
-  return this.orderService.updateAdminOrderShipping(orderId, dto);
-}
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  updateAdminOrderShipping(
+    @Param('id', ParseIntPipe) orderId: number,
+    @Body() dto: UpdateOrderShippingDto,
+  ) {
+    return this.orderService.updateAdminOrderShipping(orderId, dto);
+  }
+
   @Patch('admin/orders/:id/status')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   updateAdminOrderStatus(
     @Param('id', ParseIntPipe) orderId: number,

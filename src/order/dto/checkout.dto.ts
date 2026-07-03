@@ -1,11 +1,5 @@
 import { ShippingProvider } from '@prisma/client';
-import {
-  IsEnum,
-  IsInt,
-  IsOptional,
-  IsString,
-  Matches,
-} from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, Matches } from 'class-validator';
 
 export class CheckoutDto {
   @IsOptional()
