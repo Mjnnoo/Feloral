@@ -18,6 +18,26 @@ enum OrderStatus {
   failed
 }
 
+enum ShippingProvider {
+  post
+  tipax
+  alopeyk
+  snapp
+  tapsi
+  courier
+  free
+  other
+}
+
+enum ShippingStatus {
+  not_shipped
+  preparing
+  shipped
+  delivered
+  returned
+  canceled
+}
+
 enum CouponType {
   percent
   fixed
@@ -261,6 +281,18 @@ model Order {
   shippingPostalCode     String?
   shippingPlaque         String?
   shippingUnit           String?
+  shippingProvider       ShippingProvider?
+  shippingStatus         ShippingStatus    @default(not_shipped)
+
+  shippingCost Decimal @default(0) @db.Decimal(12, 0)
+
+  trackingCode    String?
+  trackingUrl     String?
+  providerOrderId String?
+
+  shippedAt    DateTime?
+  deliveredAt  DateTime?
+  shippingNote String?
 
   items OrderItem[]
 

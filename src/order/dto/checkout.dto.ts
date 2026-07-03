@@ -1,53 +1,55 @@
-import { Type } from 'class-transformer';
+import { ShippingProvider } from '@prisma/client';
 import {
+  IsEnum,
   IsInt,
   IsOptional,
   IsString,
-  Length,
-  Min,
+  Matches,
 } from 'class-validator';
 
 export class CheckoutDto {
-  @Type(() => Number)
   @IsOptional()
-  @IsInt({ message: 'شناسه آدرس باید عدد صحیح باشد' })
-  @Min(1, { message: 'شناسه آدرس معتبر نیست' })
+  @IsInt()
   addressId?: number;
 
   @IsOptional()
-  @IsString({ message: 'کد تخفیف باید متن باشد' })
-  @Length(2, 50, { message: 'کد تخفیف باید بین ۲ تا ۵۰ کاراکتر باشد' })
-  couponCode?: string;
-
-  @IsOptional()
-  @IsString({ message: 'نام گیرنده باید متن باشد' })
+  @IsString()
   shippingReceiverName?: string;
 
   @IsOptional()
-  @IsString({ message: 'شماره موبایل گیرنده باید متن باشد' })
+  @IsString()
+  @Matches(/^09\d{9}$/)
   shippingReceiverMobile?: string;
 
   @IsOptional()
-  @IsString({ message: 'استان باید متن باشد' })
+  @IsString()
   shippingProvince?: string;
 
   @IsOptional()
-  @IsString({ message: 'شهر باید متن باشد' })
+  @IsString()
   shippingCity?: string;
 
   @IsOptional()
-  @IsString({ message: 'آدرس باید متن باشد' })
+  @IsString()
   shippingAddressLine?: string;
 
   @IsOptional()
-  @IsString({ message: 'کد پستی باید متن باشد' })
+  @IsString()
   shippingPostalCode?: string;
 
   @IsOptional()
-  @IsString({ message: 'پلاک باید متن باشد' })
+  @IsString()
   shippingPlaque?: string;
 
   @IsOptional()
-  @IsString({ message: 'واحد باید متن باشد' })
+  @IsString()
   shippingUnit?: string;
+
+  @IsOptional()
+  @IsString()
+  couponCode?: string;
+
+  @IsOptional()
+  @IsEnum(ShippingProvider)
+  shippingProvider?: ShippingProvider;
 }

@@ -1,3 +1,4 @@
+import { UpdateOrderShippingDto } from './dto/update-order-shipping.dto';
 import {
   Body,
   Controller,
@@ -7,8 +8,10 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 
 import { OrderService } from './order.service';
 import { CheckoutDto } from './dto/checkout.dto';
@@ -39,6 +42,39 @@ export class OrderController {
   @Get('my-orders')
   getMyOrders(@User() user: AuthUser) {
     return this.orderService.getMyOrders(user.id);
+  }
+
+  @Get('my-orders/:id/invoice/print')
+  async getMyOrderInvoicePrint(
+    @User() user: AuthUser,
+    @Param('id', ParseIntPipe) orderId: number,
+    @Res() res: Response,
+  ) {
+    const html = await this.orderService.getMyOrderInvoicePrintHtml(
+      user.id,
+      orderId,
+    );
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(html);
+  }
+
+  @Get('my-orders/:id/invoice/pdf')
+  async getMyOrderInvoicePdf(
+    @User() user: AuthUser,
+    @Param('id', ParseIntPipe) orderId: number,
+    @Res() res: Response,
+  ) {
+    const pdf = await this.orderService.getMyOrderInvoicePdf(user.id, orderId);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${pdf.fileName}"`,
+    );
+    res.setHeader('Content-Length', pdf.buffer.length);
+
+    return res.end(pdf.buffer);
   }
 
   @Get('my-orders/:id/invoice')
@@ -74,6 +110,38 @@ export class OrderController {
     });
   }
 
+  @Get('admin/orders/:id/invoice/print')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  async getAdminOrderInvoicePrint(
+    @Param('id', ParseIntPipe) orderId: number,
+    @Res() res: Response,
+  ) {
+    const html = await this.orderService.getAdminOrderInvoicePrintHtml(orderId);
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(html);
+  }
+
+  @Get('admin/orders/:id/invoice/pdf')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  async getAdminOrderInvoicePdf(
+    @Param('id', ParseIntPipe) orderId: number,
+    @Res() res: Response,
+  ) {
+    const pdf = await this.orderService.getAdminOrderInvoicePdf(orderId);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${pdf.fileName}"`,
+    );
+    res.setHeader('Content-Length', pdf.buffer.length);
+
+    return res.end(pdf.buffer);
+  }
+
   @Get('admin/orders/:id/invoice')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
@@ -87,7 +155,15 @@ export class OrderController {
   getAdminOrderById(@Param('id', ParseIntPipe) orderId: number) {
     return this.orderService.getAdminOrderById(orderId);
   }
-
+  @Patch('admin/orders/:id/shipping')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.ADMIN, Role.SUPER_ADMIN)
+updateAdminOrderShipping(
+  @Param('id', ParseIntPipe) orderId: number,
+  @Body() dto: UpdateOrderShippingDto,
+) {
+  return this.orderService.updateAdminOrderShipping(orderId, dto);
+}
   @Patch('admin/orders/:id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
