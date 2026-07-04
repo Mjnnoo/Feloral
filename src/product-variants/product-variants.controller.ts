@@ -20,31 +20,32 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/enums/role.enum';
 
 @Controller('product-variants')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class ProductVariantsController {
   constructor(
     private readonly productVariantsService: ProductVariantsService,
   ) {}
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.WAREHOUSE)
   @Post()
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   create(@Body() dto: CreateProductVariantDto) {
     return this.productVariantsService.create(dto);
   }
 
   @Get()
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   findAll() {
     return this.productVariantsService.findAll();
   }
 
   @Get(':id')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.productVariantsService.findOne(id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.WAREHOUSE)
   @Patch(':id')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateProductVariantDto,
@@ -52,9 +53,8 @@ export class ProductVariantsController {
     return this.productVariantsService.update(id, dto);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.WAREHOUSE)
   @Delete(':id')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.productVariantsService.remove(id);
   }

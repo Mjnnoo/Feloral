@@ -35,6 +35,14 @@ export class ProductVariantsService {
           salePrice: data.salePrice ?? null,
           stock: data.stock,
           isActive: data.isActive ?? true,
+
+          weightGram: data.weightGram ?? 100,
+          lengthCm: data.lengthCm ?? 10,
+          widthCm: data.widthCm ?? 10,
+          heightCm: data.heightCm ?? 10,
+          isFragile: data.isFragile ?? false,
+          isLiquid: data.isLiquid ?? false,
+
           productId: data.productId,
         },
         include: {
@@ -116,7 +124,25 @@ export class ProductVariantsService {
     try {
       return await this.prisma.productVariant.update({
         where: { id },
-        data,
+        data: {
+          title: data.title,
+          sku: data.sku,
+          volume: data.volume,
+          barcode: data.barcode,
+          price: data.price,
+          salePrice: data.salePrice,
+          stock: data.stock,
+          isActive: data.isActive,
+
+          weightGram: data.weightGram,
+          lengthCm: data.lengthCm,
+          widthCm: data.widthCm,
+          heightCm: data.heightCm,
+          isFragile: data.isFragile,
+          isLiquid: data.isLiquid,
+
+          productId: data.productId,
+        },
         include: {
           product: {
             include: {

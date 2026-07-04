@@ -57,5 +57,37 @@ export class UpdateProductVariantDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  weightGram?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  lengthCm?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  widthCm?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  heightCm?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isFragile?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isLiquid?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   productId?: number;
 }

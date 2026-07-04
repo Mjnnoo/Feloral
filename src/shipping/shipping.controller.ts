@@ -8,19 +8,32 @@ import {
 } from '@nestjs/common';
 
 import { PostexService } from './postex.service';
+import { ShippingService } from './shipping.service';
+
 import { PostexTestRequestDto } from './dto/postex-test-request.dto';
 import { PostexQuoteDto } from './dto/postex-quote.dto';
 import { ShippingQuoteDto } from './dto/shipping-quote.dto';
+import { CartShippingQuoteDto } from './dto/cart-shipping-quote.dto';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/enums/role.enum';
+import { User } from '../auth/decorators/user.decorator';
+
+type AuthUser = {
+  id: number;
+  mobile: string;
+  role: string;
+};
 
 @Controller('shipping')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ShippingController {
-  constructor(private readonly postexService: PostexService) {}
+  constructor(
+    private readonly postexService: PostexService,
+    private readonly shippingService: ShippingService,
+  ) {}
 
   @Get('postex/config')
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
@@ -41,6 +54,15 @@ export class ShippingController {
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.CUSTOMER)
   getShippingQuote(@Body() dto: ShippingQuoteDto) {
     return this.postexService.getCustomerShippingQuote(dto);
+  }
+
+  @Post('cart-quote')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.CUSTOMER)
+  getCartShippingQuote(
+    @User() user: AuthUser,
+    @Body() dto: CartShippingQuoteDto,
+  ) {
+    return this.shippingService.getCartShippingQuote(user.id, dto);
   }
 
   @Post('postex/test')
