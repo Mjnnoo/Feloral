@@ -242,6 +242,7 @@ model Address {
   receiverMobile String
   province       String
   city           String
+  postexCityId   Int?
   addressLine    String
   postalCode     String?
   plaque         String?
@@ -292,6 +293,20 @@ model Order {
   shippingStatus         ShippingStatus    @default(not_shipped)
 
   shippingCost Decimal @default(0) @db.Decimal(12, 0)
+
+    postexCityId             Int?
+  postexBoxTypeId          Int?
+  postexPackageTitle       String?
+  postexPackageCode        String?
+  postexCourierCode        String?
+  postexServiceType        String?
+  postexServiceName        String?
+  postexEstimatedDelivery  String?
+  postexInternalExtraCost  Decimal @default(0) @db.Decimal(12, 0)
+  postexQuoteSnapshot      Json?
+  postexShipmentSnapshot   Json?
+  shipmentCreatedAt        DateTime?
+  shipmentError            String?
 
   trackingCode    String?
   trackingUrl     String?

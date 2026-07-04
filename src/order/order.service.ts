@@ -11,6 +11,8 @@ import {
 } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { ShippingService } from '../shipping/shipping.service';
+
 import { CheckoutDto } from './dto/checkout.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { UpdateOrderShippingDto } from './dto/update-order-shipping.dto';
@@ -23,9 +25,62 @@ type AdminOrderQuery = {
   search?: string;
 };
 
+type CheckoutAddressSnapshot = {
+  addressId: number | null;
+  postexCityId: number | null;
+  shippingReceiverName: string | null;
+  shippingReceiverMobile: string | null;
+  shippingProvince: string | null;
+  shippingCity: string | null;
+  shippingAddressLine: string | null;
+  shippingPostalCode: string | null;
+  shippingPlaque: string | null;
+  shippingUnit: string | null;
+};
+
+type PostexSelectedQuote = {
+  provider: string;
+  courierCode: string | null;
+  courierName: string | null;
+  serviceType: string | null;
+  title: string | null;
+  estimatedDelivery: string | null;
+  baseCostIrr: number;
+  extraServiceCostIrr: number;
+  baseCostToman: number;
+  extraServiceCostToman: number;
+  cost: number;
+  internalExtraCost: number;
+  currency: string;
+  raw: unknown;
+};
+
+type PostexQuoteResponseForCheckout = {
+  data?: PostexSelectedQuote[];
+  meta?: {
+    selectedPackage?: {
+      boxTypeId: number;
+      code: string;
+      title: string;
+      kind: string;
+      packageLengthCm: number;
+      packageWidthCm: number;
+      packageHeightCm: number;
+      shipmentLengthCm: number;
+      shipmentWidthCm: number;
+      shipmentHeightCm: number;
+    };
+    packageInfo?: unknown;
+    [key: string]: unknown;
+  };
+};
+
 @Injectable()
 export class OrderService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly shippingService: ShippingService,
+  ) {}
 
   private toNumber(value: unknown, fallback: number): number {
     const number = Number(value);
@@ -34,7 +89,9 @@ export class OrderService {
 
   private normalizeCouponCode(code?: string | null) {
     if (!code) return null;
+
     const normalized = code.trim().toUpperCase();
+
     return normalized.length > 0 ? normalized : null;
   }
 
@@ -72,7 +129,7 @@ export class OrderService {
 
   private getShippingProviderDescription(provider: ShippingProvider) {
     const descriptions: Record<ShippingProvider, string> = {
-      post: 'ارسال اقتصادی و مناسب برای بیشتر شهرها',
+      post: 'ارسال از طریق پستکس',
       tipax: 'ارسال سریع‌تر برای شهرهای تحت پوشش تیپاکس',
       alopeyk: 'ارسال فوری درون‌شهری با الوپیک',
       snapp: 'ارسال فوری درون‌شهری با اسنپ',
@@ -133,8 +190,13 @@ export class OrderService {
       discountAmount = Number(coupon.value);
     }
 
-    if (discountAmount > subtotal) discountAmount = subtotal;
-    if (discountAmount < 0) discountAmount = 0;
+    if (discountAmount > subtotal) {
+      discountAmount = subtotal;
+    }
+
+    if (discountAmount < 0) {
+      discountAmount = 0;
+    }
 
     return discountAmount;
   }
@@ -249,6 +311,51 @@ export class OrderService {
     };
   }
 
+  private toPrismaJson(value: unknown): Prisma.InputJsonValue {
+    return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
+  }
+
+  private async getSelectedPostexQuoteForCheckout(
+    userId: number,
+    toCityCode: number,
+    courierCode: string,
+    serviceType: string,
+  ) {
+    const quoteResponse =
+      (await this.shippingService.getCartShippingQuote(userId, {
+        toCityCode,
+      })) as PostexQuoteResponseForCheckout;
+
+    const quotes = quoteResponse.data || [];
+
+    const selectedQuote = quotes.find((item) => {
+      return (
+        item.courierCode === courierCode &&
+        item.serviceType === serviceType
+      );
+    });
+
+    if (!selectedQuote) {
+      throw new BadRequestException(
+        'روش ارسال انتخاب‌شده در قیمت‌های فعلی پستکس وجود ندارد',
+      );
+    }
+
+    if (selectedQuote.cost < 0) {
+      throw new BadRequestException('هزینه ارسال پستکس نامعتبر است');
+    }
+
+    return {
+      selectedQuote,
+      quoteResponse,
+      selectedPackage: quoteResponse.meta?.selectedPackage || null,
+    };
+  }
+
+  private getPostexServiceTitle(selectedQuote: PostexSelectedQuote) {
+    return selectedQuote.title || selectedQuote.serviceType || 'پستکس';
+  }
+
   private formatOrder(order: any) {
     const items =
       order.items?.map((item: any) => ({
@@ -336,6 +443,7 @@ export class OrderService {
         receiverMobile: order.shippingReceiverMobile,
         province: order.shippingProvince,
         city: order.shippingCity,
+        postexCityId: order.postexCityId,
         addressLine: order.shippingAddressLine,
         postalCode: order.shippingPostalCode,
         plaque: order.shippingPlaque,
@@ -344,6 +452,21 @@ export class OrderService {
         provider: order.shippingProvider,
         status: order.shippingStatus,
         cost: Number(order.shippingCost ?? 0),
+
+        postex: {
+          boxTypeId: order.postexBoxTypeId,
+          packageTitle: order.postexPackageTitle,
+          packageCode: order.postexPackageCode,
+          courierCode: order.postexCourierCode,
+          serviceType: order.postexServiceType,
+          serviceName: order.postexServiceName,
+          estimatedDelivery: order.postexEstimatedDelivery,
+          internalExtraCost: Number(order.postexInternalExtraCost ?? 0),
+          quoteSnapshot: order.postexQuoteSnapshot,
+          shipmentSnapshot: order.postexShipmentSnapshot,
+          shipmentCreatedAt: order.shipmentCreatedAt,
+          shipmentError: order.shipmentError,
+        },
 
         trackingCode: order.trackingCode,
         trackingUrl: order.trackingUrl,
@@ -479,6 +602,7 @@ export class OrderService {
         receiverMobile: order.shippingReceiverMobile,
         province: order.shippingProvince,
         city: order.shippingCity,
+        postexCityId: order.postexCityId,
         addressLine: order.shippingAddressLine,
         postalCode: order.shippingPostalCode,
         plaque: order.shippingPlaque,
@@ -488,6 +612,19 @@ export class OrderService {
         provider: order.shippingProvider,
         status: order.shippingStatus,
         cost: Number(order.shippingCost ?? 0),
+
+        postex: {
+          boxTypeId: order.postexBoxTypeId,
+          packageTitle: order.postexPackageTitle,
+          packageCode: order.postexPackageCode,
+          courierCode: order.postexCourierCode,
+          serviceType: order.postexServiceType,
+          serviceName: order.postexServiceName,
+          estimatedDelivery: order.postexEstimatedDelivery,
+          internalExtraCost: Number(order.postexInternalExtraCost ?? 0),
+          shipmentCreatedAt: order.shipmentCreatedAt,
+          shipmentError: order.shipmentError,
+        },
 
         trackingCode: order.trackingCode,
         trackingUrl: order.trackingUrl,
@@ -570,7 +707,7 @@ export class OrderService {
 
   private getShippingProviderLabel(provider?: string | null) {
     const labels: Record<string, string> = {
-      post: 'پست',
+      post: 'پستکس',
       tipax: 'تیپاکس',
       alopeyk: 'الوپیک',
       snapp: 'اسنپ',
@@ -631,6 +768,7 @@ export class OrderService {
       meta: {
         subtotal: normalizedSubtotal,
         defaultProvider: ShippingProvider.post,
+        note: 'برای قیمت واقعی پستکس از /shipping/cart-quote استفاده شود',
       },
     };
   }
@@ -644,9 +782,10 @@ export class OrderService {
     const items = invoiceData.items || [];
     const coupon = invoiceData.coupon;
 
-    const shippingProviderLabel = this.getShippingProviderLabel(
-      shipping?.provider,
-    );
+    const shippingProviderLabel =
+      shipping?.postex?.serviceName ||
+      this.getShippingProviderLabel(shipping?.provider);
+
     const shippingStatusLabel = this.getShippingStatusLabel(shipping?.status);
 
     const en = (value: unknown) =>
@@ -684,24 +823,14 @@ export class OrderService {
   <meta charset="utf-8" />
   <title>فاکتور ${this.toPersianDigits(this.escapeHtml(invoice.invoiceNumber))}</title>
   <style>
-    * {
-      box-sizing: border-box;
-    }
-
-    @font-face {
-      font-family: "InvoiceEnglish";
-      src: local("Times New Roman");
-      unicode-range: U+0000-00FF;
-    }
-
     body {
       margin: 0;
       padding: 24px;
       background: #f3f4f6;
       color: #111827;
-      font-family: "InvoiceEnglish", "B Mitra", "BMitra", Tahoma, Arial, sans-serif;
+      font-family: Tahoma, Arial, sans-serif;
       line-height: 1.9;
-      font-size: 16px;
+      font-size: 15px;
     }
 
     .invoice-page {
@@ -711,7 +840,6 @@ export class OrderService {
       border-radius: 18px;
       padding: 28px;
       box-shadow: 0 20px 60px rgba(15, 23, 42, 0.12);
-      font-family: "InvoiceEnglish", "B Mitra", "BMitra", Tahoma, Arial, sans-serif;
     }
 
     .en {
@@ -719,7 +847,6 @@ export class OrderService {
       direction: ltr;
       unicode-bidi: embed;
       font-weight: 700;
-      letter-spacing: 0.2px;
     }
 
     .top {
@@ -734,25 +861,21 @@ export class OrderService {
 
     .brand h1 {
       margin: 0;
-      font-family: "Times New Roman", Georgia, serif;
-      font-size: 38px;
+      font-size: 34px;
       color: #8b4b5f;
       font-weight: 800;
-      letter-spacing: 0.4px;
     }
 
     .brand p {
       margin: 4px 0 0;
       color: #6b7280;
-      font-size: 16px;
-      font-family: "B Mitra", "BMitra", Tahoma, Arial, sans-serif;
+      font-size: 15px;
     }
 
     .invoice-meta {
       text-align: left;
-      font-size: 15px;
+      font-size: 14px;
       color: #374151;
-      font-family: "InvoiceEnglish", "B Mitra", "BMitra", Tahoma, Arial, sans-serif;
     }
 
     .badge {
@@ -760,9 +883,8 @@ export class OrderService {
       padding: 6px 12px;
       border-radius: 999px;
       font-weight: bold;
-      font-size: 14px;
+      font-size: 13px;
       margin-top: 8px;
-      font-family: "B Mitra", "BMitra", Tahoma, Arial, sans-serif;
     }
 
     .paid {
@@ -786,12 +908,8 @@ export class OrderService {
     .card {
       border: 1px solid #e5e7eb;
       border-radius: 14px;
-      padding: 0;
       background: #ffffff;
-      color: #111827;
-      box-shadow: none;
       overflow: hidden;
-      font-family: "InvoiceEnglish", "B Mitra", "BMitra", Tahoma, Arial, sans-serif;
     }
 
     .card h2 {
@@ -799,11 +917,9 @@ export class OrderService {
       padding: 11px 14px;
       background: #8b4b5f;
       color: #ffffff;
-      font-family: "B Titr", "BTitr", "B Mitra", Tahoma, Arial, sans-serif;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: bold;
       text-align: center;
-      border-bottom: 1px solid #8b4b5f;
     }
 
     .line {
@@ -814,8 +930,7 @@ export class OrderService {
       border-bottom: 1px solid #f1f5f9;
       background: #ffffff;
       color: #111827;
-      font-size: 16px;
-      font-family: "InvoiceEnglish", "B Mitra", "BMitra", Tahoma, Arial, sans-serif;
+      font-size: 15px;
     }
 
     .line:last-child {
@@ -824,16 +939,11 @@ export class OrderService {
 
     .label {
       color: #6b7280;
-      font-family: "B Mitra", "BMitra", Tahoma, Arial, sans-serif;
-      font-size: 15px;
       white-space: nowrap;
     }
 
     .line strong {
       color: #111827;
-      font-family: "InvoiceEnglish", "B Mitra", "BMitra", Tahoma, Arial, sans-serif;
-      font-size: 16px;
-      font-weight: bold;
       text-align: left;
       word-break: break-word;
     }
@@ -854,36 +964,28 @@ export class OrderService {
       margin: 18px 0;
       overflow: hidden;
       border-radius: 14px;
-      font-family: "InvoiceEnglish", "B Mitra", "BMitra", Tahoma, Arial, sans-serif;
     }
 
     th {
       background: #8b4b5f;
       color: #ffffff;
       padding: 11px 10px;
-      font-size: 16px;
+      font-size: 15px;
       text-align: center;
-      font-family: "B Titr", "BTitr", "B Mitra", Tahoma, Arial, sans-serif;
       font-weight: bold;
     }
 
     td {
       padding: 11px 10px;
       border-bottom: 1px solid #f1f5f9;
-      font-size: 16px;
+      font-size: 15px;
       vertical-align: top;
       text-align: center;
-      font-family: "InvoiceEnglish", "B Mitra", "BMitra", Tahoma, Arial, sans-serif;
     }
 
     th:nth-child(2),
     td:nth-child(2) {
       text-align: right;
-    }
-
-    td strong {
-      font-family: "InvoiceEnglish", "B Mitra", "BMitra", Tahoma, Arial, sans-serif;
-      font-size: 16px;
     }
 
     td small {
@@ -892,7 +994,6 @@ export class OrderService {
       margin-top: 4px;
       direction: ltr;
       text-align: right;
-      font-family: "InvoiceEnglish", "B Mitra", "BMitra", Tahoma, Arial, sans-serif;
       font-size: 13px;
     }
 
@@ -903,7 +1004,6 @@ export class OrderService {
       border: 1px solid #e5e7eb;
       border-radius: 14px;
       overflow: hidden;
-      font-family: "InvoiceEnglish", "B Mitra", "BMitra", Tahoma, Arial, sans-serif;
     }
 
     .summary-row {
@@ -911,25 +1011,18 @@ export class OrderService {
       justify-content: space-between;
       padding: 11px 14px;
       border-bottom: 1px solid #f1f5f9;
-      font-size: 16px;
-      font-family: "InvoiceEnglish", "B Mitra", "BMitra", Tahoma, Arial, sans-serif;
+      font-size: 15px;
     }
 
     .summary-row:last-child {
       border-bottom: none;
     }
 
-    .summary-row strong {
-      font-size: 16px;
-      font-family: "InvoiceEnglish", "B Mitra", "BMitra", Tahoma, Arial, sans-serif;
-    }
-
     .final {
       background: #8b4b5f;
       color: #ffffff;
       font-weight: bold;
-      font-size: 17px;
-      font-family: "B Titr", "BTitr", "B Mitra", Tahoma, Arial, sans-serif;
+      font-size: 16px;
     }
 
     .footer {
@@ -937,20 +1030,14 @@ export class OrderService {
       padding-top: 14px;
       border-top: 1px solid #e5e7eb;
       color: #6b7280;
-      font-size: 14px;
+      font-size: 13px;
       text-align: center;
-      font-family: "InvoiceEnglish", "B Mitra", "BMitra", Tahoma, Arial, sans-serif;
     }
 
     .tracking-link {
       color: #8b4b5f;
       text-decoration: none;
       font-weight: bold;
-      font-family: "B Mitra", "BMitra", Tahoma, Arial, sans-serif;
-    }
-
-    .tracking-link:hover {
-      text-decoration: underline;
     }
 
     .actions {
@@ -968,26 +1055,19 @@ export class OrderService {
       padding: 10px 18px;
       border-radius: 12px;
       cursor: pointer;
-      font-family: "B Titr", "BTitr", "B Mitra", Tahoma, Arial, sans-serif;
       font-weight: bold;
-      font-size: 15px;
+      font-size: 14px;
     }
 
     button.secondary {
       background: #374151;
     }
 
-    @page {
-      size: A4;
-      margin: 8mm;
-    }
-
     @media print {
       body {
         background: #fff;
         padding: 0;
-        font-size: 13.5px;
-        line-height: 1.55;
+        font-size: 13px;
       }
 
       .invoice-page {
@@ -1001,93 +1081,6 @@ export class OrderService {
 
       .actions {
         display: none;
-      }
-
-      .top {
-        padding-bottom: 10px;
-        margin-bottom: 10px;
-      }
-
-      .brand h1 {
-        font-size: 30px;
-      }
-
-      .brand p {
-        font-size: 13px;
-      }
-
-      .invoice-meta {
-        font-size: 12.5px;
-      }
-
-      .grid {
-        gap: 8px;
-        margin-bottom: 10px;
-      }
-
-      .card h2 {
-        padding: 7px 10px;
-        font-size: 13.5px;
-      }
-
-      .line {
-        padding: 6px 10px;
-        font-size: 13.5px;
-      }
-
-      .label {
-        font-size: 13px;
-      }
-
-      .line strong {
-        font-size: 13.5px;
-      }
-
-      .shipping-detail-card .line {
-        grid-template-columns: 150px 1fr;
-      }
-
-      table {
-        margin: 10px 0;
-      }
-
-      th {
-        padding: 7px 8px;
-        font-size: 13.5px;
-      }
-
-      td {
-        padding: 7px 8px;
-        font-size: 13.5px;
-      }
-
-      td small {
-        font-size: 11.5px;
-        margin-top: 2px;
-      }
-
-      .summary {
-        margin-top: 12px;
-        max-width: 380px;
-      }
-
-      .summary-row {
-        padding: 7px 10px;
-        font-size: 13.5px;
-      }
-
-      .summary-row strong {
-        font-size: 13.5px;
-      }
-
-      .final {
-        font-size: 14px;
-      }
-
-      .footer {
-        margin-top: 12px;
-        padding-top: 8px;
-        font-size: 12px;
       }
     }
 
@@ -1108,15 +1101,6 @@ export class OrderService {
 
       .invoice-meta {
         text-align: right;
-      }
-
-      th,
-      td {
-        padding: 8px 6px;
-      }
-
-      .summary {
-        max-width: none;
       }
 
       .shipping-detail-card .line {
@@ -1203,6 +1187,16 @@ export class OrderService {
         </div>
 
         <div class="line">
+          <span class="label">بسته پستکس</span>
+          <strong>${mixed(shipping?.postex?.packageTitle || '-')}</strong>
+        </div>
+
+        <div class="line">
+          <span class="label">زمان تقریبی تحویل</span>
+          <strong>${mixed(shipping?.postex?.estimatedDelivery || '-')}</strong>
+        </div>
+
+        <div class="line">
           <span class="label">وضعیت ارسال</span>
           <strong>${this.escapeHtml(shippingStatusLabel)}</strong>
         </div>
@@ -1240,28 +1234,6 @@ export class OrderService {
               <div class="line">
                 <span class="label">شناسه شرکت ارسال</span>
                 <strong>${mixed(shipping.providerOrderId)}</strong>
-              </div>
-            `
-            : ''
-        }
-
-        ${
-          shipping?.shippedAt
-            ? `
-              <div class="line">
-                <span class="label">تاریخ ارسال</span>
-                <strong>${this.formatDate(shipping.shippedAt)}</strong>
-              </div>
-            `
-            : ''
-        }
-
-        ${
-          shipping?.deliveredAt
-            ? `
-              <div class="line">
-                <span class="label">تاریخ تحویل</span>
-                <strong>${this.formatDate(shipping.deliveredAt)}</strong>
               </div>
             `
             : ''
@@ -1345,10 +1317,14 @@ export class OrderService {
   async checkout(userId: number, dto: CheckoutDto) {
     const result = await this.prisma.$transaction(async (tx) => {
       const cart = await tx.cart.findUnique({
-        where: { userId },
+        where: {
+          userId,
+        },
         include: {
           items: {
-            orderBy: { id: 'asc' },
+            orderBy: {
+              id: 'asc',
+            },
             include: {
               variant: {
                 include: {
@@ -1364,18 +1340,9 @@ export class OrderService {
         throw new BadRequestException('سبد خرید خالی است');
       }
 
-      let addressSnapshot: {
-        addressId: number | null;
-        shippingReceiverName: string | null;
-        shippingReceiverMobile: string | null;
-        shippingProvince: string | null;
-        shippingCity: string | null;
-        shippingAddressLine: string | null;
-        shippingPostalCode: string | null;
-        shippingPlaque: string | null;
-        shippingUnit: string | null;
-      } = {
+      let addressSnapshot: CheckoutAddressSnapshot = {
         addressId: null,
+        postexCityId: dto.postexCityId || null,
         shippingReceiverName: dto.shippingReceiverName?.trim() || null,
         shippingReceiverMobile: dto.shippingReceiverMobile?.trim() || null,
         shippingProvince: dto.shippingProvince?.trim() || null,
@@ -1401,6 +1368,7 @@ export class OrderService {
 
         addressSnapshot = {
           addressId: address.id,
+          postexCityId: address.postexCityId || null,
           shippingReceiverName: address.receiverName,
           shippingReceiverMobile: address.receiverMobile,
           shippingProvince: address.province,
@@ -1481,8 +1449,13 @@ export class OrderService {
         discountTotal = couponResult.discountAmount;
       }
 
-      const selectedShippingProvider =
-        dto.shippingProvider || ShippingProvider.post;
+      if (!addressSnapshot.postexCityId) {
+        throw new BadRequestException(
+          'کد شهر پستکس برای آدرس انتخاب‌شده ثبت نشده است',
+        );
+      }
+
+      const selectedShippingProvider = ShippingProvider.post;
 
       if (!this.isCustomerSelectableShippingProvider(selectedShippingProvider)) {
         throw new BadRequestException(
@@ -1490,10 +1463,20 @@ export class OrderService {
         );
       }
 
-      const shippingCost = this.calculateShippingCost(
-        selectedShippingProvider,
-        subtotal,
-      );
+      const postexCheckoutQuote =
+        await this.getSelectedPostexQuoteForCheckout(
+          userId,
+          addressSnapshot.postexCityId,
+          dto.courierCode,
+          dto.serviceType,
+        );
+
+      const selectedPostexQuote = postexCheckoutQuote.selectedQuote;
+      const selectedPostexPackage = postexCheckoutQuote.selectedPackage;
+
+      const shippingCost = selectedPostexQuote.cost;
+      const postexInternalExtraCost =
+        selectedPostexQuote.internalExtraCost || 0;
 
       const payableTotal = subtotal - discountTotal + shippingCost;
 
@@ -1522,6 +1505,23 @@ export class OrderService {
 
           shippingProvider: selectedShippingProvider,
           shippingCost: new Prisma.Decimal(shippingCost),
+
+          postexCityId: addressSnapshot.postexCityId,
+          postexBoxTypeId: selectedPostexPackage?.boxTypeId || null,
+          postexPackageTitle: selectedPostexPackage?.title || null,
+          postexPackageCode: selectedPostexPackage?.code || null,
+
+          postexCourierCode: selectedPostexQuote.courierCode,
+          postexServiceType: selectedPostexQuote.serviceType,
+          postexServiceName: this.getPostexServiceTitle(selectedPostexQuote),
+          postexEstimatedDelivery: selectedPostexQuote.estimatedDelivery,
+          postexInternalExtraCost: new Prisma.Decimal(
+            postexInternalExtraCost,
+          ),
+
+          postexQuoteSnapshot: this.toPrismaJson(
+            postexCheckoutQuote.quoteResponse,
+          ),
 
           coupon: couponConnect
             ? {

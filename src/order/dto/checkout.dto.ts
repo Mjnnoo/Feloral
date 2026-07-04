@@ -1,9 +1,18 @@
+import { Type } from 'class-transformer';
+import {
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 import { ShippingProvider } from '@prisma/client';
-import { IsEnum, IsInt, IsOptional, IsString, Matches } from 'class-validator';
 
 export class CheckoutDto {
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
+  @Min(1)
   addressId?: number;
 
   @IsOptional()
@@ -12,7 +21,6 @@ export class CheckoutDto {
 
   @IsOptional()
   @IsString()
-  @Matches(/^09\d{9}$/)
   shippingReceiverMobile?: string;
 
   @IsOptional()
@@ -22,6 +30,12 @@ export class CheckoutDto {
   @IsOptional()
   @IsString()
   shippingCity?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  postexCityId?: number;
 
   @IsOptional()
   @IsString()
@@ -43,7 +57,18 @@ export class CheckoutDto {
   @IsString()
   couponCode?: string;
 
+  /**
+   * فعلاً برای پستکس، provider داخل سفارش همان post ذخیره می‌شود.
+   * قیمت واقعی از پستکس گرفته می‌شود، نه از calculateShippingCost داخلی.
+   */
   @IsOptional()
-  @IsEnum(ShippingProvider)
   shippingProvider?: ShippingProvider;
+
+  @IsString()
+  @IsNotEmpty()
+  courierCode!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  serviceType!: string;
 }

@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus, ShippingStatus } from '@prisma/client';
 import axios from 'axios';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -21,13 +21,43 @@ export class PaymentService {
     return this.configService.get<string>('PAYMENT_PROVIDER') ?? 'mock';
   }
 
+  private getPayableAmount(order: any) {
+    const payableTotal = Number(order.payableTotal ?? 0);
+    const total = Number(order.total ?? 0);
+
+    if (payableTotal > 0) {
+      return payableTotal;
+    }
+
+    return total;
+  }
+
   private formatOrder(order: any) {
     return {
       id: order.id,
       userId: order.userId,
       status: order.status,
-      total: Number(order.total),
+
+      subtotal: Number(order.subtotal ?? 0),
+      discountTotal: Number(order.discountTotal ?? 0),
+      shippingCost: Number(order.shippingCost ?? 0),
+      payableTotal: Number(order.payableTotal ?? 0),
+      total: Number(order.total ?? 0),
+
+      shippingStatus: order.shippingStatus,
       authority: order.authority,
+
+      postex: {
+        cityId: order.postexCityId,
+        boxTypeId: order.postexBoxTypeId,
+        packageTitle: order.postexPackageTitle,
+        packageCode: order.postexPackageCode,
+        courierCode: order.postexCourierCode,
+        serviceType: order.postexServiceType,
+        serviceName: order.postexServiceName,
+        estimatedDelivery: order.postexEstimatedDelivery,
+      },
+
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
     };
@@ -53,22 +83,27 @@ export class PaymentService {
       throw new BadRequestException('این سفارش قبلاً پرداخت شده است');
     }
 
-    if (order.status !== OrderStatus.pending && order.status !== OrderStatus.failed) {
+    if (
+      order.status !== OrderStatus.pending &&
+      order.status !== OrderStatus.failed
+    ) {
       throw new BadRequestException('این سفارش قابل پرداخت نیست');
     }
 
-    if (Number(order.total) <= 0) {
+    const amount = this.getPayableAmount(order);
+
+    if (amount <= 0) {
       throw new BadRequestException('مبلغ سفارش نامعتبر است');
     }
 
     const provider = this.getProvider();
 
     if (provider === 'mock') {
-      return this.createMockPayment(order.id, Number(order.total));
+      return this.createMockPayment(order.id, amount);
     }
 
     if (provider === 'zarinpal') {
-      return this.createZarinpalPayment(order.id, Number(order.total));
+      return this.createZarinpalPayment(order.id, amount);
     }
 
     throw new BadRequestException('درگاه پرداخت نامعتبر است');
@@ -128,7 +163,13 @@ export class PaymentService {
         provider: this.getProvider(),
         authority: order.authority,
         status: order.status,
-        amount: Number(order.total),
+        shippingStatus: order.shippingStatus,
+
+        amount: this.getPayableAmount(order),
+        subtotal: Number(order.subtotal ?? 0),
+        shippingCost: Number(order.shippingCost ?? 0),
+        payableTotal: Number(order.payableTotal ?? 0),
+
         paid: order.status === OrderStatus.paid,
         failed: order.status === OrderStatus.failed,
         createdAt: order.createdAt,
@@ -189,8 +230,10 @@ export class PaymentService {
         message: 'این سفارش قبلاً پرداخت شده است',
         orderId: order.id,
         status: order.status,
+        shippingStatus: order.shippingStatus,
         authority,
         refId: `MOCK-REF-${order.id}`,
+        amount: this.getPayableAmount(order),
         order: this.formatOrder(order),
       };
     }
@@ -210,13 +253,18 @@ export class PaymentService {
         provider: 'mock',
         orderId: failedOrder.id,
         status: failedOrder.status,
+        shippingStatus: failedOrder.shippingStatus,
         authority,
+        amount: this.getPayableAmount(failedOrder),
         message: 'پرداخت تستی لغو یا ناموفق شد',
         order: this.formatOrder(failedOrder),
       };
     }
 
-    if (order.status !== OrderStatus.pending && order.status !== OrderStatus.failed) {
+    if (
+      order.status !== OrderStatus.pending &&
+      order.status !== OrderStatus.failed
+    ) {
       throw new BadRequestException('این سفارش قابل تأیید پرداخت نیست');
     }
 
@@ -226,6 +274,7 @@ export class PaymentService {
       },
       data: {
         status: OrderStatus.paid,
+        shippingStatus: ShippingStatus.preparing,
       },
     });
 
@@ -234,8 +283,10 @@ export class PaymentService {
       provider: 'mock',
       orderId: paidOrder.id,
       status: paidOrder.status,
+      shippingStatus: paidOrder.shippingStatus,
       authority,
       refId: `MOCK-REF-${paidOrder.id}`,
+      amount: this.getPayableAmount(paidOrder),
       message: 'پرداخت تستی با موفقیت تأیید شد',
       order: this.formatOrder(paidOrder),
     };
@@ -354,11 +405,16 @@ export class PaymentService {
         message: 'این سفارش قبلاً پرداخت شده است',
         orderId: order.id,
         status: order.status,
+        shippingStatus: order.shippingStatus,
+        amount: this.getPayableAmount(order),
         order: this.formatOrder(order),
       };
     }
 
-    if (order.status !== OrderStatus.pending && order.status !== OrderStatus.failed) {
+    if (
+      order.status !== OrderStatus.pending &&
+      order.status !== OrderStatus.failed
+    ) {
       throw new BadRequestException('این سفارش قابل تأیید پرداخت نیست');
     }
 
@@ -370,13 +426,19 @@ export class PaymentService {
       );
     }
 
+    const amount = this.getPayableAmount(order);
+
+    if (amount <= 0) {
+      throw new BadRequestException('مبلغ سفارش نامعتبر است');
+    }
+
     try {
       const res = await axios.post(
         'https://api.zarinpal.com/pg/v4/payment/verify.json',
         {
           merchant_id: merchantId,
           authority,
-          amount: Number(order.total),
+          amount,
         },
       );
 
@@ -391,6 +453,7 @@ export class PaymentService {
           },
           data: {
             status: OrderStatus.paid,
+            shippingStatus: ShippingStatus.preparing,
           },
         });
 
@@ -399,7 +462,9 @@ export class PaymentService {
           provider: 'zarinpal',
           orderId: paidOrder.id,
           status: paidOrder.status,
+          shippingStatus: paidOrder.shippingStatus,
           authority,
+          amount,
           refId: data?.ref_id ?? null,
           cardPan: data?.card_pan ?? null,
           message: 'پرداخت با موفقیت تأیید شد',
@@ -421,7 +486,9 @@ export class PaymentService {
         provider: 'zarinpal',
         orderId: failedOrder.id,
         status: failedOrder.status,
+        shippingStatus: failedOrder.shippingStatus,
         authority,
+        amount,
         gatewayCode: code ?? null,
         gatewayErrors: errors ?? null,
         message: 'تأیید پرداخت ناموفق بود',

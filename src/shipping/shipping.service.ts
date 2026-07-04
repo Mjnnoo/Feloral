@@ -4,12 +4,18 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PostexService } from './postex.service';
 import { CartShippingQuoteDto } from './dto/cart-shipping-quote.dto';
+import {
+  PackageSelectionInput,
+  PostexPackageSelectorService,
+  SelectedPostexPackage,
+} from './postex-package-selector.service';
 
 @Injectable()
 export class ShippingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly postexService: PostexService,
+    private readonly postexPackageSelectorService: PostexPackageSelectorService,
   ) {}
 
   async getCartShippingQuote(userId: number, dto: CartShippingQuoteDto) {
@@ -59,14 +65,48 @@ export class ShippingService {
 
     const packageInfo = this.calculatePackageInfo(activeItems);
 
+    const candidatePackages =
+      this.postexPackageSelectorService.getCandidatePackages(packageInfo);
+
+    let lastError: unknown = null;
+
+    for (const selectedPackage of candidatePackages) {
+      try {
+        const quote = await this.getQuoteWithSelectedPackage(
+          dto,
+          packageInfo,
+          selectedPackage,
+        );
+
+        return this.attachPackageMeta(quote, selectedPackage, packageInfo);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw new BadRequestException({
+      message:
+        'پستکس هیچ‌کدام از بسته‌های مناسب این سبد خرید را قبول نکرد',
+      lastError: this.extractErrorMessage(lastError),
+    });
+  }
+
+  private async getQuoteWithSelectedPackage(
+    dto: CartShippingQuoteDto,
+    packageInfo: PackageSelectionInput,
+    selectedPackage: SelectedPostexPackage,
+  ) {
     return this.postexService.getCustomerShippingQuote({
       toCityCode: dto.toCityCode,
-      weightGram: packageInfo.weightGram,
-      valueToman: packageInfo.valueToman,
-      lengthCm: packageInfo.lengthCm,
-      widthCm: packageInfo.widthCm,
-      heightCm: packageInfo.heightCm,
-      boxTypeId: dto.boxTypeId || 6,
+      weightGram: packageInfo.totalWeightGram,
+      valueToman: packageInfo.totalValueToman,
+
+      lengthCm: selectedPackage.shipmentLengthCm,
+      widthCm: selectedPackage.shipmentWidthCm,
+      heightCm: selectedPackage.shipmentHeightCm,
+
+      boxTypeId: selectedPackage.boxTypeId,
+
       isFragile: packageInfo.isFragile,
       isLiquid: packageInfo.isLiquid,
       pickupNeeded: dto.pickupNeeded || false,
@@ -87,20 +127,26 @@ export class ShippingService {
         isLiquid: boolean;
       };
     }>,
-  ) {
+  ): PackageSelectionInput {
     let totalWeightGram = 0;
     let totalValueToman = 0;
     let totalVolumeCm3 = 0;
 
     let maxLengthCm = 1;
     let maxWidthCm = 1;
+    let maxHeightCm = 1;
 
     let isFragile = false;
     let isLiquid = false;
 
-    for (const item of items) {
+    const packageItems = items.map((item) => {
       const variant = item.variant;
       const quantity = item.quantity;
+
+      const weightGram = Math.max(variant.weightGram || 100, 1);
+      const lengthCm = Math.max(variant.lengthCm || 10, 1);
+      const widthCm = Math.max(variant.widthCm || 10, 1);
+      const heightCm = Math.max(variant.heightCm || 10, 1);
 
       const finalPrice = this.getFinalPrice(
         variant.price,
@@ -108,17 +154,13 @@ export class ShippingService {
       );
 
       totalValueToman += finalPrice * quantity;
-
-      totalWeightGram += Math.max(variant.weightGram || 100, 1) * quantity;
-
-      const lengthCm = Math.max(variant.lengthCm || 10, 1);
-      const widthCm = Math.max(variant.widthCm || 10, 1);
-      const heightCm = Math.max(variant.heightCm || 10, 1);
+      totalWeightGram += weightGram * quantity;
 
       totalVolumeCm3 += lengthCm * widthCm * heightCm * quantity;
 
       maxLengthCm = Math.max(maxLengthCm, lengthCm);
       maxWidthCm = Math.max(maxWidthCm, widthCm);
+      maxHeightCm = Math.max(maxHeightCm, heightCm);
 
       if (variant.isFragile) {
         isFragile = true;
@@ -127,20 +169,40 @@ export class ShippingService {
       if (variant.isLiquid) {
         isLiquid = true;
       }
-    }
 
-    const calculatedHeightCm = Math.ceil(
-      totalVolumeCm3 / (maxLengthCm * maxWidthCm),
+      return {
+        quantity,
+        weightGram,
+        lengthCm,
+        widthCm,
+        heightCm,
+        isFragile: variant.isFragile,
+        isLiquid: variant.isLiquid,
+      };
+    });
+
+    const estimatedLengthCm = Math.max(Math.ceil(maxLengthCm), 1);
+    const estimatedWidthCm = Math.max(Math.ceil(maxWidthCm), 1);
+
+    const estimatedHeightByVolume = Math.ceil(
+      totalVolumeCm3 / (estimatedLengthCm * estimatedWidthCm),
+    );
+
+    const estimatedHeightCm = Math.max(
+      Math.ceil(estimatedHeightByVolume),
+      Math.ceil(maxHeightCm),
+      1,
     );
 
     return {
-      weightGram: Math.max(totalWeightGram, 1),
-      valueToman: Math.max(Math.ceil(totalValueToman), 0),
-      lengthCm: Math.max(maxLengthCm, 1),
-      widthCm: Math.max(maxWidthCm, 1),
-      heightCm: Math.max(calculatedHeightCm, 1),
+      items: packageItems,
+      totalWeightGram: Math.max(Math.ceil(totalWeightGram), 1),
+      totalValueToman: Math.max(Math.ceil(totalValueToman), 0),
       isFragile,
       isLiquid,
+      estimatedLengthCm,
+      estimatedWidthCm,
+      estimatedHeightCm,
     };
   }
 
@@ -160,5 +222,63 @@ export class ShippingService {
     }
 
     return originalPrice;
+  }
+
+  private attachPackageMeta(
+    quote: unknown,
+    selectedPackage: SelectedPostexPackage,
+    packageInfo: PackageSelectionInput,
+  ) {
+    if (
+      typeof quote === 'object' &&
+      quote !== null &&
+      !Array.isArray(quote)
+    ) {
+      const quoteObject = quote as {
+        data?: unknown;
+        meta?: Record<string, unknown>;
+      };
+
+      return {
+        ...quoteObject,
+        meta: {
+          ...(quoteObject.meta || {}),
+          selectedPackage,
+          packageInfo: {
+            totalWeightGram: packageInfo.totalWeightGram,
+            totalValueToman: packageInfo.totalValueToman,
+            estimatedLengthCm: packageInfo.estimatedLengthCm,
+            estimatedWidthCm: packageInfo.estimatedWidthCm,
+            estimatedHeightCm: packageInfo.estimatedHeightCm,
+            isFragile: packageInfo.isFragile,
+            isLiquid: packageInfo.isLiquid,
+          },
+        },
+      };
+    }
+
+    return {
+      data: quote,
+      meta: {
+        selectedPackage,
+        packageInfo: {
+          totalWeightGram: packageInfo.totalWeightGram,
+          totalValueToman: packageInfo.totalValueToman,
+          estimatedLengthCm: packageInfo.estimatedLengthCm,
+          estimatedWidthCm: packageInfo.estimatedWidthCm,
+          estimatedHeightCm: packageInfo.estimatedHeightCm,
+          isFragile: packageInfo.isFragile,
+          isLiquid: packageInfo.isLiquid,
+        },
+      },
+    };
+  }
+
+  private extractErrorMessage(error: unknown) {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return error;
   }
 }
