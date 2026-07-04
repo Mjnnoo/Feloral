@@ -10,6 +10,7 @@ import {
 import { PostexService } from './postex.service';
 import { PostexTestRequestDto } from './dto/postex-test-request.dto';
 import { PostexQuoteDto } from './dto/postex-quote.dto';
+import { ShippingQuoteDto } from './dto/shipping-quote.dto';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles/roles.guard';
@@ -28,12 +29,18 @@ export class ShippingController {
   }
 
   @Get('postex/cities')
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.CUSTOMER)
   searchPostexCities(
     @Query('keyword') keyword: string,
     @Query('direction') direction?: 'from' | 'to',
   ) {
     return this.postexService.searchCities(keyword, direction || 'to');
+  }
+
+  @Post('quote')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.CUSTOMER)
+  getShippingQuote(@Body() dto: ShippingQuoteDto) {
+    return this.postexService.getCustomerShippingQuote(dto);
   }
 
   @Post('postex/test')

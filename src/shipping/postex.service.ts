@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 
 import { PostexQuoteDto } from './dto/postex-quote.dto';
+import { ShippingQuoteDto } from './dto/shipping-quote.dto';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 type CityDirection = 'from' | 'to';
@@ -58,6 +59,7 @@ export class PostexService {
       baseUrl: this.baseUrl,
       hasApiKey: Boolean(this.apiKey),
       authHeaderName: this.authHeaderName,
+      fromCityId: process.env.POSTEX_FROM_CITY_ID || null,
     };
   }
 
@@ -128,6 +130,30 @@ export class PostexService {
       `/api/app/v1/locality/cities/${direction}/all?keyword=${encodedKeyword}`,
       'GET',
     );
+  }
+
+  async getCustomerShippingQuote(dto: ShippingQuoteDto) {
+    const fromCityCode = Number(process.env.POSTEX_FROM_CITY_ID);
+
+    if (!fromCityCode || Number.isNaN(fromCityCode)) {
+      throw new InternalServerErrorException(
+        'POSTEX_FROM_CITY_ID داخل فایل .env تنظیم نشده است',
+      );
+    }
+
+    return this.getShippingQuote({
+      fromCityCode,
+      toCityCode: dto.toCityCode,
+      weightGram: dto.weightGram,
+      valueToman: dto.valueToman,
+      lengthCm: dto.lengthCm,
+      widthCm: dto.widthCm,
+      heightCm: dto.heightCm,
+      boxTypeId: dto.boxTypeId,
+      isFragile: dto.isFragile,
+      isLiquid: dto.isLiquid,
+      pickupNeeded: dto.pickupNeeded,
+    });
   }
 
   async getShippingQuote(dto: PostexQuoteDto) {

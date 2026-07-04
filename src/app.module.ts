@@ -1,3 +1,4 @@
+import { ShippingModule } from './shipping/shipping.module';
 import { CouponsModule } from './coupons/coupons.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { Module } from '@nestjs/common';
@@ -78,6 +79,7 @@ import { CatalogModule } from './catalog/catalog.module';
     CatalogModule,
     InventoryModule,
     CouponsModule,
+    ShippingModule,
   ],
 })
 export class AppModule {}
