@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { OrderStatus, ShippingStatus } from '@prisma/client';
+import { OrderStatus, Prisma, ShippingStatus } from '@prisma/client';
 import axios from 'axios';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -63,6 +63,80 @@ export class PaymentService {
     };
   }
 
+  private async failPendingOrderAndRestoreStock(
+    authority: string,
+    orderId: number,
+  ) {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const order = await tx.order.findFirst({
+        where: {
+          id: orderId,
+          authority,
+        },
+        include: {
+          items: true,
+        },
+      });
+
+      if (!order) {
+        throw new NotFoundException('سفارش پرداختی پیدا نشد');
+      }
+
+      if (order.status === OrderStatus.paid) {
+        throw new BadRequestException(
+          'سفارش پرداخت‌شده قابل ناموفق شدن نیست',
+        );
+      }
+
+      if (order.status === OrderStatus.failed) {
+        return {
+          order,
+          restoredStock: false,
+          alreadyFailed: true,
+        };
+      }
+
+      if (order.status !== OrderStatus.pending) {
+        throw new BadRequestException(
+          'این سفارش در وضعیت قابل ناموفق شدن نیست',
+        );
+      }
+
+      for (const item of order.items) {
+        if (item.variantId && item.quantity > 0) {
+          await tx.productVariant.update({
+            where: {
+              id: item.variantId,
+            },
+            data: {
+              stock: {
+                increment: item.quantity,
+              },
+            },
+          });
+        }
+      }
+
+      const failedOrder = await tx.order.update({
+        where: {
+          id: order.id,
+        },
+        data: {
+          status: OrderStatus.failed,
+        },
+        include: {
+          items: true,
+        },
+      });
+
+      return {
+        order: failedOrder,
+        restoredStock: true,
+        alreadyFailed: false,
+      };
+    });
+  }
+
   async createPayment(orderId: number, userId: number) {
     if (!orderId || Number.isNaN(Number(orderId))) {
       throw new BadRequestException('شناسه سفارش نامعتبر است');
@@ -83,10 +157,13 @@ export class PaymentService {
       throw new BadRequestException('این سفارش قبلاً پرداخت شده است');
     }
 
-    if (
-      order.status !== OrderStatus.pending &&
-      order.status !== OrderStatus.failed
-    ) {
+    if (order.status === OrderStatus.failed) {
+      throw new BadRequestException(
+        'این سفارش ناموفق شده و قابل پرداخت مجدد نیست. لطفاً سفارش جدید ثبت کنید',
+      );
+    }
+
+    if (order.status !== OrderStatus.pending) {
       throw new BadRequestException('این سفارش قابل پرداخت نیست');
     }
 
@@ -239,32 +316,35 @@ export class PaymentService {
     }
 
     if (status && status !== 'OK') {
-      const failedOrder = await this.prisma.order.update({
-        where: {
-          id: order.id,
-        },
-        data: {
-          status: OrderStatus.failed,
-        },
-      });
+      const failedResult = await this.failPendingOrderAndRestoreStock(
+        authority,
+        orderId,
+      );
 
       return {
         success: false,
         provider: 'mock',
-        orderId: failedOrder.id,
-        status: failedOrder.status,
-        shippingStatus: failedOrder.shippingStatus,
+        orderId: failedResult.order.id,
+        status: failedResult.order.status,
+        shippingStatus: failedResult.order.shippingStatus,
         authority,
-        amount: this.getPayableAmount(failedOrder),
-        message: 'پرداخت تستی لغو یا ناموفق شد',
-        order: this.formatOrder(failedOrder),
+        amount: this.getPayableAmount(failedResult.order),
+        stockRestored: failedResult.restoredStock,
+        alreadyFailed: failedResult.alreadyFailed,
+        message: failedResult.alreadyFailed
+          ? 'این سفارش قبلاً ناموفق شده بود'
+          : 'پرداخت تستی لغو یا ناموفق شد و موجودی کالا به انبار برگشت',
+        order: this.formatOrder(failedResult.order),
       };
     }
 
-    if (
-      order.status !== OrderStatus.pending &&
-      order.status !== OrderStatus.failed
-    ) {
+    if (order.status === OrderStatus.failed) {
+      throw new BadRequestException(
+        'این سفارش ناموفق شده و قابل تأیید پرداخت نیست. لطفاً سفارش جدید ثبت کنید',
+      );
+    }
+
+    if (order.status !== OrderStatus.pending) {
       throw new BadRequestException('این سفارش قابل تأیید پرداخت نیست');
     }
 
@@ -368,22 +448,25 @@ export class PaymentService {
     status?: string,
   ) {
     if (status && status !== 'OK') {
-      const failedOrder = await this.prisma.order.updateMany({
-        where: {
-          id: orderId,
-          authority,
-          status: OrderStatus.pending,
-        },
-        data: {
-          status: OrderStatus.failed,
-        },
-      });
+      const failedResult = await this.failPendingOrderAndRestoreStock(
+        authority,
+        orderId,
+      );
 
       return {
         success: false,
         provider: 'zarinpal',
-        updated: failedOrder.count,
-        message: 'پرداخت توسط کاربر یا درگاه لغو شد',
+        orderId: failedResult.order.id,
+        status: failedResult.order.status,
+        shippingStatus: failedResult.order.shippingStatus,
+        authority,
+        amount: this.getPayableAmount(failedResult.order),
+        stockRestored: failedResult.restoredStock,
+        alreadyFailed: failedResult.alreadyFailed,
+        message: failedResult.alreadyFailed
+          ? 'این سفارش قبلاً ناموفق شده بود'
+          : 'پرداخت توسط کاربر یا درگاه لغو شد و موجودی کالا به انبار برگشت',
+        order: this.formatOrder(failedResult.order),
       };
     }
 
@@ -411,10 +494,13 @@ export class PaymentService {
       };
     }
 
-    if (
-      order.status !== OrderStatus.pending &&
-      order.status !== OrderStatus.failed
-    ) {
+    if (order.status === OrderStatus.failed) {
+      throw new BadRequestException(
+        'این سفارش ناموفق شده و قابل تأیید پرداخت نیست. لطفاً سفارش جدید ثبت کنید',
+      );
+    }
+
+    if (order.status !== OrderStatus.pending) {
       throw new BadRequestException('این سفارش قابل تأیید پرداخت نیست');
     }
 
@@ -472,29 +558,37 @@ export class PaymentService {
         };
       }
 
-      const failedOrder = await this.prisma.order.update({
-        where: {
-          id: order.id,
-        },
-        data: {
-          status: OrderStatus.failed,
-        },
-      });
+      const failedResult = await this.failPendingOrderAndRestoreStock(
+        authority,
+        order.id,
+      );
 
       return {
         success: false,
         provider: 'zarinpal',
-        orderId: failedOrder.id,
-        status: failedOrder.status,
-        shippingStatus: failedOrder.shippingStatus,
+        orderId: failedResult.order.id,
+        status: failedResult.order.status,
+        shippingStatus: failedResult.order.shippingStatus,
         authority,
         amount,
         gatewayCode: code ?? null,
         gatewayErrors: errors ?? null,
-        message: 'تأیید پرداخت ناموفق بود',
-        order: this.formatOrder(failedOrder),
+        stockRestored: failedResult.restoredStock,
+        alreadyFailed: failedResult.alreadyFailed,
+        message: failedResult.alreadyFailed
+          ? 'این سفارش قبلاً ناموفق شده بود'
+          : 'تأیید پرداخت ناموفق بود و موجودی کالا به انبار برگشت',
+        order: this.formatOrder(failedResult.order),
       };
     } catch (error) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException ||
+        error instanceof InternalServerErrorException
+      ) {
+        throw error;
+      }
+
       console.error('ZARINPAL VERIFY ERROR:', error?.response?.data ?? error);
 
       throw new InternalServerErrorException(
