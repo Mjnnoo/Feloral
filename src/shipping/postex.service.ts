@@ -44,6 +44,13 @@ type PostexQuoteResponse = {
   }>;
 };
 
+type PostexWalletBalanceResponse = {
+  amount?: number;
+  frozenAmount?: number;
+  userId?: string;
+  userID?: string;
+};
+
 @Injectable()
 export class PostexService {
   private readonly baseUrl =
@@ -61,6 +68,14 @@ export class PostexService {
       authHeaderName: this.authHeaderName,
       fromCityId: process.env.POSTEX_FROM_CITY_ID || null,
     };
+  }
+
+
+  async getWalletBalance() {
+    return this.request<PostexWalletBalanceResponse>(
+      '/api/v1/wallet/balance',
+      'GET',
+    );
   }
 
   async request<TResponse = unknown>(
@@ -166,6 +181,15 @@ export class PostexService {
     );
 
     return this.normalizeQuoteResponse(raw);
+  }
+
+
+  async registerBulkShipment(payload: Record<string, unknown>) {
+    if (!payload || typeof payload !== 'object') {
+      throw new BadRequestException('payload ثبت مرسوله پستکس نامعتبر است');
+    }
+
+    return this.request('/api/v1/parcels/bulk', 'POST', payload);
   }
 
   private buildQuotePayload(dto: PostexQuoteDto) {

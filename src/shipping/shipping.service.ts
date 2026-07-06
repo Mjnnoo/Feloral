@@ -91,6 +91,15 @@ export class ShippingService {
     });
   }
 
+
+  async registerPostexShipment(payload: Record<string, unknown>) {
+    return this.postexService.registerBulkShipment(payload);
+  }
+
+  async getPostexWalletBalance() {
+    return this.postexService.getWalletBalance();
+  }
+
   private async getQuoteWithSelectedPackage(
     dto: CartShippingQuoteDto,
     packageInfo: PackageSelectionInput,

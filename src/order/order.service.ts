@@ -2029,4 +2029,561 @@ export class OrderService {
       order: this.formatOrder(result),
     };
   }
+
+  private parsePostexBoolean(value: string | undefined, fallback: boolean) {
+    if (value === undefined || value === null || value === '') {
+      return fallback;
+    }
+
+    return ['true', '1', 'yes', 'on'].includes(value.toLowerCase());
+  }
+
+  private getRequiredEnv(name: string) {
+    const value = process.env[name]?.trim();
+
+    if (!value) {
+      throw new BadRequestException(`${name} داخل فایل .env تنظیم نشده است`);
+    }
+
+    return value;
+  }
+
+  private getOptionalEnv(name: string) {
+    const value = process.env[name]?.trim();
+
+    return value && value.length > 0 ? value : '';
+  }
+
+  private getRequiredEnvNumber(name: string) {
+    const value = Number(process.env[name]);
+
+    if (!value || Number.isNaN(value)) {
+      throw new BadRequestException(`${name} داخل فایل .env معتبر نیست`);
+    }
+
+    return value;
+  }
+
+  private splitFullName(fullName?: string | null) {
+    const normalized = (fullName || '').trim();
+
+    if (!normalized) {
+      return {
+        firstName: 'مشتری',
+        lastName: 'فلورال',
+      };
+    }
+
+    const parts = normalized.split(/\s+/).filter(Boolean);
+
+    if (parts.length === 1) {
+      return {
+        firstName: parts[0],
+        lastName: '',
+      };
+    }
+
+    return {
+      firstName: parts[0],
+      lastName: parts.slice(1).join(' '),
+    };
+  }
+
+  private buildOrderFullAddress(order: any) {
+    return [
+      order.shippingProvince,
+      order.shippingCity,
+      order.shippingAddressLine,
+      order.shippingPlaque ? `پلاک ${order.shippingPlaque}` : null,
+      order.shippingUnit ? `واحد ${order.shippingUnit}` : null,
+    ]
+      .filter(Boolean)
+      .join('، ');
+  }
+
+  private getPostexQuoteMeta(order: any) {
+    const snapshot = order.postexQuoteSnapshot as any;
+
+    return {
+      selectedPackage: snapshot?.meta?.selectedPackage || null,
+      packageInfo: snapshot?.meta?.packageInfo || null,
+    };
+  }
+
+  private getPostexShipmentDimensions(order: any) {
+    const { selectedPackage, packageInfo } = this.getPostexQuoteMeta(order);
+
+    const length =
+      Number(selectedPackage?.shipmentLengthCm) ||
+      Number(selectedPackage?.packageLengthCm) ||
+      Number(packageInfo?.estimatedLengthCm) ||
+      10;
+
+    const width =
+      Number(selectedPackage?.shipmentWidthCm) ||
+      Number(selectedPackage?.packageWidthCm) ||
+      Number(packageInfo?.estimatedWidthCm) ||
+      10;
+
+    const height =
+      Number(selectedPackage?.shipmentHeightCm) ||
+      Number(selectedPackage?.packageHeightCm) ||
+      Number(packageInfo?.estimatedHeightCm) ||
+      10;
+
+    return {
+      length: Math.max(Math.ceil(length), 1),
+      width: Math.max(Math.ceil(width), 1),
+      height: Math.max(Math.ceil(height), 1),
+    };
+  }
+
+  private getPostexShipmentWeight(order: any) {
+    const { packageInfo } = this.getPostexQuoteMeta(order);
+
+    const snapshotWeight = Number(packageInfo?.totalWeightGram);
+
+    if (snapshotWeight > 0) {
+      return Math.ceil(snapshotWeight);
+    }
+
+    const calculatedWeight = (order.items || []).reduce((sum: number, item: any) => {
+      const itemWeight = Number(item.variant?.weightGram || 100);
+      const quantity = Number(item.quantity || 0);
+
+      return sum + Math.max(itemWeight, 1) * quantity;
+    }, 0);
+
+    return Math.max(Math.ceil(calculatedWeight), 1);
+  }
+
+  private getPostexShipmentFlags(order: any) {
+    const { packageInfo } = this.getPostexQuoteMeta(order);
+
+    const isFragile =
+      typeof packageInfo?.isFragile === 'boolean'
+        ? packageInfo.isFragile
+        : (order.items || []).some((item: any) => Boolean(item.variant?.isFragile));
+
+    const isLiquid =
+      typeof packageInfo?.isLiquid === 'boolean'
+        ? packageInfo.isLiquid
+        : (order.items || []).some((item: any) => Boolean(item.variant?.isLiquid));
+
+    return {
+      isFragile,
+      isLiquid,
+    };
+  }
+
+  private tomanToIrr(value: unknown) {
+    return Math.max(Math.ceil(Number(value ?? 0) * 10), 0);
+  }
+
+  private buildPostexRegisterPayload(order: any) {
+    if (!order.postexCityId) {
+      throw new BadRequestException('کد شهر پستکس برای سفارش ثبت نشده است');
+    }
+
+    if (!order.postexCourierCode || !order.postexServiceType) {
+      throw new BadRequestException('سرویس پستکس برای سفارش ثبت نشده است');
+    }
+
+    if (!order.shippingReceiverMobile) {
+      throw new BadRequestException('شماره موبایل گیرنده در سفارش ثبت نشده است');
+    }
+
+    if (!order.shippingPostalCode) {
+      throw new BadRequestException('کد پستی گیرنده در سفارش ثبت نشده است');
+    }
+
+    const senderFirstName = this.getRequiredEnv('POSTEX_FROM_FIRST_NAME');
+    const senderLastName = this.getOptionalEnv('POSTEX_FROM_LAST_NAME');
+    const senderMobile = this.getRequiredEnv('POSTEX_FROM_MOBILE');
+    const senderPostCode = this.getRequiredEnv('POSTEX_FROM_POST_CODE');
+    const senderCityId = this.getRequiredEnvNumber('POSTEX_FROM_CITY_ID');
+    const senderCityName = this.getRequiredEnv('POSTEX_FROM_CITY_NAME');
+    const senderAddress = this.getRequiredEnv('POSTEX_FROM_ADDRESS');
+
+    const collectionType =
+      process.env.POSTEX_COLLECTION_TYPE?.trim() || 'postex_drop_off';
+
+    const paymentType =
+      process.env.POSTEX_PAYMENT_TYPE?.trim() || 'SENDER';
+
+    const receiverName = this.splitFullName(order.shippingReceiverName);
+    const dimensions = this.getPostexShipmentDimensions(order);
+    const totalWeight = this.getPostexShipmentWeight(order);
+    const flags = this.getPostexShipmentFlags(order);
+
+    const orderNo = `FEL-${String(order.id).padStart(6, '0')}`;
+
+    const parcelItems = (order.items || []).map((item: any) => {
+      const description = [item.productName, item.variantTitle]
+        .filter(Boolean)
+        .join(' - ');
+
+      return {
+        description: description || `Order item #${item.id}`,
+        product_id: item.productId || 0,
+        properties: {
+          order_item_id: String(item.id),
+          variant_id: String(item.variantId),
+        },
+        quantity: item.quantity,
+        sku: item.sku || String(item.variantId),
+        price: this.tomanToIrr(item.price),
+        weight: Math.max(Number(item.variant?.weightGram || 100), 1),
+      };
+    });
+
+    const payload: Record<string, unknown> = {
+      collection_type: collectionType,
+      remark: `Feloral order ${orderNo}`,
+      custom_batch_no: `FELORAL-${orderNo}`,
+      custom_channel: 'api',
+      parcels: [
+        {
+          from: {
+            contact: {
+              first_name: senderFirstName,
+              last_name: senderLastName,
+              mobile_no: senderMobile,
+              telephone_no: this.getOptionalEnv('POSTEX_FROM_TELEPHONE'),
+              email_address: this.getOptionalEnv('POSTEX_FROM_EMAIL'),
+              company_name: this.getOptionalEnv('POSTEX_FROM_COMPANY_NAME'),
+              national_code: this.getOptionalEnv('POSTEX_FROM_NATIONAL_CODE'),
+            },
+            location: {
+              post_code: senderPostCode,
+              country: this.getOptionalEnv('POSTEX_FROM_COUNTRY') || 'IR',
+              city_id: senderCityId,
+              city_name: senderCityName,
+              address: senderAddress,
+              lat: this.getOptionalEnv('POSTEX_FROM_LAT'),
+              lon: this.getOptionalEnv('POSTEX_FROM_LON'),
+            },
+          },
+          to: {
+            contact: {
+              first_name: receiverName.firstName,
+              last_name: receiverName.lastName,
+              mobile_no: order.shippingReceiverMobile,
+              telephone_no: order.shippingReceiverMobile,
+              email_address: order.user?.email || '',
+              company_name: '',
+              national_code: '',
+            },
+            location: {
+              post_code: order.shippingPostalCode,
+              country: 'IR',
+              city_id: order.postexCityId,
+              city_name: order.shippingCity || '',
+              address: this.buildOrderFullAddress(order),
+              lat: '',
+              lon: '',
+            },
+          },
+          parcel_items: parcelItems,
+          additional_data: {
+            feloral_order_id: String(order.id),
+            authority: order.authority || '',
+          },
+          parcel_properties: {
+            length: dimensions.length,
+            width: dimensions.width,
+            height: dimensions.height,
+            total_weight: totalWeight,
+            is_fragile: flags.isFragile,
+            is_liquid: flags.isLiquid,
+            total_value: this.tomanToIrr(order.subtotal),
+            pre_paid_amount: this.tomanToIrr(order.payableTotal || order.total),
+            total_value_currency: 'IRR',
+            box_type_id: order.postexBoxTypeId || 6,
+          },
+          courier: {
+            name: order.postexCourierCode,
+            service_type: order.postexServiceType,
+            payment_type: paymentType,
+          },
+          added_service: {
+            request_label: this.parsePostexBoolean(
+              process.env.POSTEX_REQUEST_LABEL,
+              true,
+            ),
+            request_packaging: this.parsePostexBoolean(
+              process.env.POSTEX_REQUEST_PACKAGING,
+              false,
+            ),
+            request_sms_notification: this.parsePostexBoolean(
+              process.env.POSTEX_REQUEST_SMS_NOTIFICATION,
+              true,
+            ),
+          },
+          delivery_instructions:
+            order.shippingNote || 'لطفاً مرسوله با احتیاط حمل شود',
+          custom_order_no: orderNo,
+          custom_reference_no: String(order.id),
+          remarks: `Feloral order ${order.id}`,
+          submit_channel: 'api',
+          ready_to_accept: true,
+        },
+      ],
+    };
+
+    const dropOffLocationId = Number(process.env.POSTEX_DROP_OFF_LOCATION_ID);
+    const fromAddressBookId = Number(process.env.POSTEX_FROM_ADDRESS_BOOK_ID);
+
+    const parcels = payload.parcels as Array<Record<string, unknown>>;
+
+    if (dropOffLocationId && !Number.isNaN(dropOffLocationId)) {
+      parcels[0].drop_off_location_id = dropOffLocationId;
+    }
+
+    if (fromAddressBookId && !Number.isNaN(fromAddressBookId)) {
+      parcels[0].from_address_book_id = fromAddressBookId;
+    }
+
+    return payload;
+  }
+
+  private findDeepValue(value: unknown, keys: string[]): string | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = this.findDeepValue(item, keys);
+
+        if (found) {
+          return found;
+        }
+      }
+
+      return null;
+    }
+
+    if (typeof value === 'object') {
+      const record = value as Record<string, unknown>;
+
+      for (const key of keys) {
+        const directValue = record[key];
+
+        if (
+          directValue !== null &&
+          directValue !== undefined &&
+          String(directValue).trim() !== ''
+        ) {
+          return String(directValue);
+        }
+      }
+
+      for (const nestedValue of Object.values(record)) {
+        const found = this.findDeepValue(nestedValue, keys);
+
+        if (found) {
+          return found;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private extractPostexTrackingCode(response: unknown) {
+    return this.findDeepValue(response, [
+      'trackingCode',
+      'tracking_code',
+      'tracking_number',
+      'trackingNumber',
+      'barcode',
+      'barcode_no',
+      'waybill_number',
+      'waybillNumber',
+      'shipment_code',
+      'shipmentCode',
+      'parcel_code',
+      'parcelCode',
+    ]);
+  }
+
+  private extractPostexProviderOrderId(response: unknown) {
+    return this.findDeepValue(response, [
+      'providerOrderId',
+      'provider_order_id',
+      'parcel_id',
+      'parcelId',
+      'postex_order_id',
+      'postexOrderId',
+      'order_no',
+      'orderNo',
+      'custom_order_no',
+      'customOrderNo',
+    ]);
+  }
+
+  private extractPostexTrackingUrl(response: unknown) {
+    return this.findDeepValue(response, [
+      'trackingUrl',
+      'tracking_url',
+      'tracking_link',
+      'trackingLink',
+    ]);
+  }
+
+  private getPostexErrorMessage(error: unknown) {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
+  }
+
+
+  private getPostexWalletAmountIrr(wallet: any) {
+    const amount = Number(wallet?.amount ?? 0);
+
+    if (Number.isNaN(amount) || amount < 0) {
+      return 0;
+    }
+
+    return amount;
+  }
+
+  private getPostexWalletFrozenAmountIrr(wallet: any) {
+    const frozenAmount = Number(wallet?.frozenAmount ?? 0);
+
+    if (Number.isNaN(frozenAmount) || frozenAmount < 0) {
+      return 0;
+    }
+
+    return frozenAmount;
+  }
+
+  private getPostexWalletUserId(wallet: any) {
+    return wallet?.userId || wallet?.userID || null;
+  }
+
+  private buildPostexWalletInsufficientError(
+    wallet: any,
+    shippingCostToman: number,
+  ) {
+    const walletAmountIrr = this.getPostexWalletAmountIrr(wallet);
+    const walletFrozenAmountIrr = this.getPostexWalletFrozenAmountIrr(wallet);
+    const requiredAmountIrr = Math.ceil(shippingCostToman * 10);
+
+    return {
+      message: 'موجودی کیف پول پستکس برای ثبت این مرسوله کافی نیست',
+      wallet: {
+        amountIrr: walletAmountIrr,
+        amountToman: Math.floor(walletAmountIrr / 10),
+        frozenAmountIrr: walletFrozenAmountIrr,
+        frozenAmountToman: Math.floor(walletFrozenAmountIrr / 10),
+        userId: this.getPostexWalletUserId(wallet),
+      },
+      required: {
+        shippingCostToman,
+        requiredAmountIrr,
+      },
+      hint: 'کیف پول پستکس را شارژ کنید و سپس ثبت مرسوله را دوباره بزنید',
+    };
+  }
+
+  async registerPostexShipment(orderId: number) {
+    const order = await this.prisma.order.findUnique({
+      where: {
+        id: orderId,
+      },
+      include: this.getOrderInclude(),
+    });
+
+    if (!order) {
+      throw new NotFoundException('سفارش پیدا نشد');
+    }
+
+    if (order.status !== OrderStatus.paid) {
+      throw new BadRequestException('فقط سفارش پرداخت‌شده قابل ثبت در پستکس است');
+    }
+
+    if (order.shipmentCreatedAt) {
+      throw new BadRequestException('این سفارش قبلاً در پستکس ثبت شده است');
+    }
+
+    const payload = this.buildPostexRegisterPayload(order);
+
+    try {
+      const wallet = await this.shippingService.getPostexWalletBalance();
+      const shippingCostToman = Number(order.shippingCost ?? 0);
+      const walletAmountIrr = this.getPostexWalletAmountIrr(wallet);
+      const requiredAmountIrr = Math.ceil(shippingCostToman * 10);
+
+      if (shippingCostToman > 0 && walletAmountIrr < requiredAmountIrr) {
+        throw new BadRequestException(
+          this.buildPostexWalletInsufficientError(
+            wallet,
+            shippingCostToman,
+          ),
+        );
+      }
+
+      const response = await this.shippingService.registerPostexShipment(
+        payload,
+      );
+
+      const trackingCode = this.extractPostexTrackingCode(response);
+      const providerOrderId = this.extractPostexProviderOrderId(response);
+      const trackingUrl = this.extractPostexTrackingUrl(response);
+
+      const updatedOrder = await this.prisma.order.update({
+        where: {
+          id: order.id,
+        },
+        data: {
+          postexShipmentSnapshot: this.toPrismaJson({
+            request: payload,
+            wallet,
+            response,
+          }),
+          shipmentCreatedAt: new Date(),
+          shipmentError: null,
+          trackingCode: trackingCode || undefined,
+          providerOrderId: providerOrderId || undefined,
+          trackingUrl: trackingUrl || undefined,
+          shippingNote: trackingCode
+            ? `مرسوله در پستکس ثبت شد. کد رهگیری: ${trackingCode}`
+            : 'مرسوله در پستکس ثبت شد',
+        },
+        include: this.getOrderInclude(),
+      });
+
+      return {
+        message: 'مرسوله با موفقیت در پستکس ثبت شد',
+        order: this.formatOrder(updatedOrder),
+        postex: {
+          wallet,
+          response,
+          trackingCode,
+          providerOrderId,
+          trackingUrl,
+        },
+      };
+    } catch (error) {
+      await this.prisma.order.update({
+        where: {
+          id: order.id,
+        },
+        data: {
+          shipmentError: this.getPostexErrorMessage(error).slice(0, 1000),
+        },
+      });
+
+      throw error;
+    }
+  }
+
 }
