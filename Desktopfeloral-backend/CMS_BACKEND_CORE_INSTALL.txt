@@ -1,0 +1,28 @@
+نصب CMS Backend Core
+
+1) فایل‌ها را در ریشه بک‌اند Replace کن.
+
+مسیر بک‌اند شما:
+C:\Users\MJN\Desktop\feloral\Desktopfeloral-backend
+
+2) بعد این دستورات را بزن:
+
+npx prisma format
+npx prisma migrate dev --name add_cms_core
+npx prisma generate
+npm run start:dev
+
+3) بعد با توکن ادمین این route را بزن:
+
+POST http://localhost:3000/cms/admin/seed-homepage
+Authorization: Bearer {{token}}
+
+Body ندارد.
+
+4) تست خروجی عمومی:
+
+GET http://localhost:3000/cms/public/homepage
+
+5) نکته مهم:
+home.ai.internal و admin.ai.description در seed با isPublic=false و status=hidden ساخته شده‌اند.
+یعنی Feloral AI برای مشتری عمومی برنمی‌گردد.

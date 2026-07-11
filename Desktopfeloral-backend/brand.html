@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Create Brand</title>
+</head>
+<body>
+
+<button onclick="createBrand()">Create Brand</button>
+
+<pre id="result"></pre>
+
+<script>
+function createBrand(){
+
+fetch("http://localhost:3000/brands",{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+name:"Dior",
+slug:"dior"
+})
+})
+.then(r=>r.json())
+.then(d=>{
+document.getElementById("result").innerText=
+JSON.stringify(d,null,2);
+})
+.catch(e=>{
+document.getElementById("result").innerText=e;
+});
+
+}
+</script>
+
+</body>
+</html>

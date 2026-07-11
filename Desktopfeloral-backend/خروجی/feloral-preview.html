@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Feloral Preview</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: Tahoma, Arial, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background: #faf7fb;
+      color: #222;
+    }
+
+    header {
+      background: linear-gradient(135deg, #111, #7b2cbf);
+      color: white;
+      padding: 40px 24px;
+      text-align: center;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 42px;
+      letter-spacing: 1px;
+    }
+
+    header p {
+      margin: 12px auto 0;
+      max-width: 720px;
+      line-height: 1.9;
+      font-size: 16px;
+      opacity: 0.95;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 28px 16px 60px;
+    }
+
+    .search-box {
+      background: white;
+      border-radius: 20px;
+      padding: 18px;
+      margin-top: -30px;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.12);
+      display: flex;
+      gap: 10px;
+    }
+
+    .search-box input {
+      flex: 1;
+      border: 1px solid #ddd;
+      border-radius: 14px;
+      padding: 14px;
+      font-size: 15px;
+      outline: none;
+    }
+
+    .search-box button {
+      border: 0;
+      border-radius: 14px;
+      background: #7b2cbf;
+      color: white;
+      padding: 0 22px;
+      cursor: pointer;
+      font-size: 15px;
+    }
+
+    .section {
+      margin-top: 38px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .section-title h2 {
+      margin: 0;
+      font-size: 22px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 18px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 22px;
+      overflow: hidden;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+      transition: 0.25s;
+      cursor: pointer;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 14px 35px rgba(0, 0, 0, 0.13);
+    }
+
+    .image {
+      width: 100%;
+      height: 210px;
+      background: #eee;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #999;
+      font-size: 14px;
+    }
+
+    .image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .card-body {
+      padding: 14px;
+    }
+
+    .brand {
+      color: #7b2cbf;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+
+    .name {
+      font-size: 16px;
+      font-weight: bold;
+      min-height: 44px;
+      line-height: 1.6;
+    }
+
+    .price-row {
+      margin-top: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .final-price {
+      color: #111;
+      font-weight: bold;
+      font-size: 17px;
+    }
+
+    .old-price {
+      color: #999;
+      text-decoration: line-through;
+      font-size: 13px;
+    }
+
+    .discount {
+      background: #ffedf2;
+      color: #d90429;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .stock {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #008000;
+    }
+
+    .chips {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      background: white;
+      border: 1px solid #eee;
+      border-radius: 999px;
+      padding: 10px 16px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+    }
+
+    .detail {
+      background: white;
+      border-radius: 24px;
+      padding: 22px;
+      margin-top: 28px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      display: none;
+    }
+
+    .detail.active {
+      display: block;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    .detail-image {
+      width: 100%;
+      height: 360px;
+      border-radius: 20px;
+      background: #eee;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #999;
+    }
+
+    .detail-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .detail h2 {
+      margin-top: 0;
+      font-size: 28px;
+    }
+
+    .muted {
+      color: #666;
+      line-height: 1.9;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #777;
+    }
+
+    .error {
+      background: #fff3f3;
+      border: 1px solid #ffb4b4;
+      color: #b00020;
+      padding: 16px;
+      border-radius: 16px;
+      margin-top: 20px;
+      display: none;
+    }
+
+    @media (max-width: 900px) {
+      .grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .detail-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      header h1 {
+        font-size: 32px;
+      }
+
+      .search-box {
+        flex-direction: column;
+      }
+
+      .search-box button {
+        padding: 14px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1 id="heroTitle">Feloral</h1>
+    <p id="heroDescription">در حال دریافت اطلاعات از بک‌اند...</p>
+  </header>
+
+  <main class="container">
+    <div class="search-box">
+      <input id="searchInput" placeholder="جستجوی محصول، برند یا دسته‌بندی..." />
+      <button onclick="searchProducts()">جستجو</button>
+    </div>
+
+    <div id="errorBox" class="error"></div>
+
+    <section id="detailBox" class="detail"></section>
+
+    <section class="section">
+      <div class="section-title">
+        <h2>برندها</h2>
+      </div>
+      <div id="brands" class="chips"></div>
+    </section>
+
+    <section class="section">
+      <div class="section-title">
+        <h2>دسته‌بندی‌ها</h2>
+      </div>
+      <div id="categories" class="chips"></div>
+    </section>
+
+    <section class="section">
+      <div class="section-title">
+        <h2>جدیدترین محصولات</h2>
+      </div>
+      <div id="newestProducts" class="grid">
+        <div class="loading">در حال بارگذاری...</div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-title">
+        <h2>تخفیف‌دارها</h2>
+      </div>
+      <div id="discountedProducts" class="grid"></div>
+    </section>
+
+    <section class="section">
+      <div class="section-title">
+        <h2>عطرها</h2>
+      </div>
+      <div id="perfumeProducts" class="grid"></div>
+    </section>
+
+    <section class="section">
+      <div class="section-title">
+        <h2>مراقبت پوست</h2>
+      </div>
+      <div id="skinCareProducts" class="grid"></div>
+    </section>
+  </main>
+
+  <script>
+    const API_BASE = 'http://localhost:3000';
+
+    function formatPrice(value) {
+      if (value === null || value === undefined) return '-';
+      return Number(value).toLocaleString('fa-IR') + ' تومان';
+    }
+
+    function showError(message) {
+      const box = document.getElementById('errorBox');
+      box.style.display = 'block';
+      box.innerText = message;
+    }
+
+    function clearError() {
+      const box = document.getElementById('errorBox');
+      box.style.display = 'none';
+      box.innerText = '';
+    }
+
+    function imageHtml(url, alt) {
+      if (!url) {
+        return '<div class="image">بدون تصویر</div>';
+      }
+
+      const fullUrl = url.startsWith('http') ? url : API_BASE + url;
+
+      return `
+        <div class="image">
+          <img src="${fullUrl}" alt="${alt || ''}" />
+        </div>
+      `;
+    }
+
+    function productCard(product) {
+      const firstVariant = product.variants?.[0];
+      const hasDiscount = firstVariant?.hasDiscount;
+      const oldPrice = firstVariant?.originalPrice;
+      const finalPrice = firstVariant?.finalPrice;
+      const discountPercent = firstVariant?.discountPercent;
+
+      return `
+        <div class="card" onclick="loadProductDetail('${product.slug}')">
+          ${imageHtml(product.primaryImage, product.name)}
+          <div class="card-body">
+            <div class="brand">${product.brand?.name || 'بدون برند'} / ${product.category?.name || 'بدون دسته'}</div>
+            <div class="name">${product.name}</div>
+
+            <div class="price-row">
+              <span class="final-price">${formatPrice(finalPrice)}</span>
+              ${
+                hasDiscount
+                  ? `<span class="old-price">${formatPrice(oldPrice)}</span>
+                     <span class="discount">${discountPercent}%</span>`
+                  : ''
+              }
+            </div>
+
+            <div class="stock">
+              ${product.isInStock ? 'موجود در انبار' : 'ناموجود'}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderProducts(elementId, products) {
+      const el = document.getElementById(elementId);
+
+      if (!products || products.length === 0) {
+        el.innerHTML = '<div class="loading">محصولی برای نمایش وجود ندارد.</div>';
+        return;
+      }
+
+      el.innerHTML = products.map(productCard).join('');
+    }
+
+    function renderChips(elementId, items) {
+      const el = document.getElementById(elementId);
+
+      if (!items || items.length === 0) {
+        el.innerHTML = '<span class="chip">موردی وجود ندارد</span>';
+        return;
+      }
+
+      el.innerHTML = items
+        .map((item) => `<span class="chip">${item.name}</span>`)
+        .join('');
+    }
+
+    async function loadHome() {
+      try {
+        clearError();
+
+        const res = await fetch(`${API_BASE}/catalog/home`);
+
+        if (!res.ok) {
+          throw new Error('خطا در دریافت اطلاعات صفحه اصلی');
+        }
+
+        const data = await res.json();
+
+        document.getElementById('heroTitle').innerText = data.hero?.title || 'Feloral';
+        document.getElementById('heroDescription').innerText =
+          data.hero?.description || 'فروشگاه فلورال';
+
+        renderChips('brands', data.brands);
+        renderChips('categories', data.categories);
+
+        renderProducts('newestProducts', data.sections?.newestProducts || []);
+        renderProducts('discountedProducts', data.sections?.discountedProducts || []);
+        renderProducts('perfumeProducts', data.sections?.perfumeProducts || []);
+        renderProducts('skinCareProducts', data.sections?.skinCareProducts || []);
+      } catch (error) {
+        showError(
+          'اتصال به بک‌اند برقرار نشد. مطمئن شو NestJS روی http://localhost:3000 اجراست و CORS فعال است.'
+        );
+        console.error(error);
+      }
+    }
+
+    async function loadProductDetail(slug) {
+      try {
+        clearError();
+
+        const res = await fetch(`${API_BASE}/catalog/products/${slug}`);
+
+        if (!res.ok) {
+          throw new Error('خطا در دریافت جزئیات محصول');
+        }
+
+        const product = await res.json();
+        const firstVariant = product.variants?.[0];
+
+        const detailBox = document.getElementById('detailBox');
+        detailBox.classList.add('active');
+
+        const imageUrl = product.primaryImage
+          ? product.primaryImage.startsWith('http')
+            ? product.primaryImage
+            : API_BASE + product.primaryImage
+          : null;
+
+        detailBox.innerHTML = `
+          <div class="detail-grid">
+            <div class="detail-image">
+              ${
+                imageUrl
+                  ? `<img src="${imageUrl}" alt="${product.name}" />`
+                  : 'بدون تصویر'
+              }
+            </div>
+
+            <div>
+              <h2>${product.name}</h2>
+              <p class="muted">${product.description || product.shortDesc || ''}</p>
+
+              <p><strong>برند:</strong> ${product.brand?.name || '-'}</p>
+              <p><strong>دسته‌بندی:</strong> ${product.category?.name || '-'}</p>
+              <p><strong>تنوع:</strong> ${firstVariant?.title || '-'}</p>
+              <p><strong>موجودی:</strong> ${product.totalStock}</p>
+
+              <div class="price-row">
+                <span class="final-price">${formatPrice(firstVariant?.finalPrice)}</span>
+                ${
+                  firstVariant?.hasDiscount
+                    ? `<span class="old-price">${formatPrice(firstVariant?.originalPrice)}</span>
+                       <span class="discount">${firstVariant.discountPercent}% تخفیف</span>`
+                    : ''
+                }
+              </div>
+
+              <p class="muted">
+                پایین همین صفحه اگر relatedProducts داشته باشد، یعنی محصولات مشابه هم از بک‌اند آماده برگشته‌اند.
+              </p>
+            </div>
+          </div>
+
+          <section class="section">
+            <div class="section-title">
+              <h2>محصولات مشابه</h2>
+            </div>
+            <div class="grid">
+              ${
+                product.relatedProducts && product.relatedProducts.length
+                  ? product.relatedProducts.map(productCard).join('')
+                  : '<div class="loading">محصول مشابهی وجود ندارد.</div>'
+              }
+            </div>
+          </section>
+        `;
+
+        detailBox.scrollIntoView({ behavior: 'smooth' });
+      } catch (error) {
+        showError('جزئیات محصول دریافت نشد.');
+        console.error(error);
+      }
+    }
+
+    async function searchProducts() {
+      try {
+        clearError();
+
+        const q = document.getElementById('searchInput').value.trim();
+
+        if (!q) {
+          await loadHome();
+          return;
+        }
+
+        const res = await fetch(
+          `${API_BASE}/catalog/search/suggestions?q=${encodeURIComponent(q)}`
+        );
+
+        if (!res.ok) {
+          throw new Error('خطا در جستجو');
+        }
+
+        const data = await res.json();
+
+        document.getElementById('detailBox').classList.remove('active');
+
+        renderProducts('newestProducts', data.products || []);
+        document.getElementById('discountedProducts').innerHTML = '';
+        document.getElementById('perfumeProducts').innerHTML = '';
+        document.getElementById('skinCareProducts').innerHTML = '';
+
+        renderChips('brands', data.brands);
+        renderChips('categories', data.categories);
+      } catch (error) {
+        showError('جستجو انجام نشد.');
+        console.error(error);
+      }
+    }
+
+    document.getElementById('searchInput').addEventListener('keydown', function (event) {
+      if (event.key === 'Enter') {
+        searchProducts();
+      }
+    });
+
+    loadHome();
+  </script>
+</body>
+</html>

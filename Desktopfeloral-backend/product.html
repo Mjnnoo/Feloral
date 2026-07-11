@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+
+<button onclick="save()">Create Product</button>
+
+<pre id="r"></pre>
+
+<script>
+
+function save(){
+
+fetch("http://localhost:3000/products",{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+
+name:"Dior Sauvage",
+
+englishName:"Dior Sauvage",
+
+slug:"dior-sauvage",
+
+description:"Luxury Men's Perfume",
+
+shortDesc:"Fresh & Woody",
+
+brandId:1,
+
+categoryId:1,
+
+isActive:true
+
+})
+})
+.then(r=>r.json())
+.then(d=>{
+document.getElementById("r").innerHTML=
+JSON.stringify(d,null,2)
+})
+
+}
+
+</script>
+
+</body>
+</html>
