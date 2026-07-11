@@ -1,0 +1,8 @@
+این اسکریپت سکشن‌های اصلی CMS را می‌سازد تا خطای «سکشن مورد نظر یافت نشد» رفع شود.
+
+نصب:
+1) فایل seed-cms-sections-fix.js را داخل ریشه بک‌اند بگذار:
+C:\Users\MJN\Desktop\feloral\Desktopfeloral-backend
+
+2) اجرا:
+node .\seed-cms-sections-fix.js

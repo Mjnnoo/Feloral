@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Feloral - Create Variant</title>
+
+<style>
+body{
+    font-family:Tahoma;
+    background:#f5f5f5;
+    padding:40px;
+}
+
+button{
+    background:#1976d2;
+    color:white;
+    border:none;
+    padding:15px 30px;
+    font-size:18px;
+    cursor:pointer;
+}
+
+pre{
+    background:white;
+    padding:20px;
+    margin-top:30px;
+    border-radius:10px;
+}
+</style>
+
+</head>
+<body>
+
+<h2>Create Product Variant</h2>
+
+<button onclick="save()">
+Create Variant
+</button>
+
+<pre id="result"></pre>
+
+<script>
+
+async function save(){
+
+const res=await fetch("http://localhost:3000/product-variants",{
+
+method:"POST",
+
+headers:{
+"Content-Type":"application/json"
+},
+
+body:JSON.stringify({
+
+title:"100ml",
+
+sku:"DS100",
+
+volume:100,
+
+barcode:"6261234567890",
+
+price:5890000,
+
+salePrice:5490000,
+
+stock:25,
+
+isActive:true,
+
+productId:2
+
+})
+
+});
+
+const data=await res.json();
+
+document.getElementById("result").innerHTML=
+JSON.stringify(data,null,2);
+
+}
+
+</script>
+
+</body>
+</html>

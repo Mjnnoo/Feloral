@@ -1,0 +1,242 @@
+
+"use client";
+
+import { useEffect } from "react";
+
+type SavedPosition = {
+  left: number;
+  top: number;
+  width?: number;
+};
+
+type SavedMap = Record<string, SavedPosition>;
+
+const STORAGE_KEY = "feloral.header.draggable.items.handles.v2";
+
+function inEditorMode() {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("editor") === "1";
+}
+
+function readSaved(): SavedMap {
+  try {
+    return JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "{}") as SavedMap;
+  } catch {
+    return {};
+  }
+}
+
+function writeSaved(saved: SavedMap) {
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+}
+
+function applyFixed(el: HTMLElement, pos: SavedPosition) {
+  el.style.position = "fixed";
+  el.style.left = `${pos.left}px`;
+  el.style.top = `${pos.top}px`;
+  el.style.right = "auto";
+  el.style.bottom = "auto";
+  el.style.margin = "0";
+  el.style.transform = "none";
+  el.style.zIndex = "99980";
+  if (pos.width && pos.width > 20) el.style.width = `${pos.width}px`;
+}
+
+function searchBox() {
+  const input = document.querySelector("header input") as HTMLInputElement | null;
+  return (input?.closest("div") as HTMLElement | null) || null;
+}
+
+function getItems() {
+  const nav = document.querySelector('[data-feloral-header-nav="right"]') as HTMLElement | null;
+  const navLinks = nav ? (Array.from(nav.querySelectorAll("a")) as HTMLElement[]) : [];
+
+  return [
+    { id: "nav-home", label: "خانه", el: navLinks[0] || null },
+    { id: "nav-brand", label: "برندها", el: navLinks[1] || null },
+    { id: "nav-category", label: "دسته‌بندی", el: navLinks[2] || null },
+    { id: "nav-offer", label: "پیشنهاد ویژه", el: navLinks[3] || null },
+    { id: "cart", label: "سبد خرید", el: document.querySelector('header a[href="/cart"]') as HTMLElement | null },
+    { id: "login", label: "ورود", el: (document.querySelector('header a[href="/account"]') || document.querySelector('header a[href="/login"]')) as HTMLElement | null },
+    { id: "search", label: "جستجو", el: searchBox() },
+    { id: "logo", label: "لوگو", el: document.querySelector('[data-feloral-header-logo="center"]') as HTMLElement | null },
+  ].filter((x) => Boolean(x.el)) as Array<{ id: string; label: string; el: HTMLElement }>;
+}
+
+function clearOldHandles() {
+  document.querySelectorAll("[data-feloral-drag-handle='true'],[data-feloral-drag-reset='true']").forEach((n) => n.remove());
+}
+
+function makeHandle(item: { id: string; label: string; el: HTMLElement }) {
+  const handle = document.createElement("button");
+  handle.type = "button";
+  handle.dataset.feloralDragHandle = "true";
+  handle.dataset.feloralDragId = item.id;
+  handle.textContent = `جابجایی ${item.label}`;
+
+  handle.style.position = "fixed";
+  handle.style.zIndex = "99999";
+  handle.style.padding = "6px 9px";
+  handle.style.borderRadius = "999px";
+  handle.style.border = "1px solid rgba(214,168,79,.72)";
+  handle.style.background = "rgba(15,15,18,.92)";
+  handle.style.color = "#f7e6bd";
+  handle.style.fontSize = "11px";
+  handle.style.fontWeight = "900";
+  handle.style.lineHeight = "1";
+  handle.style.cursor = "grab";
+  handle.style.boxShadow = "0 12px 30px rgba(0,0,0,.32)";
+  handle.style.userSelect = "none";
+  handle.style.touchAction = "none";
+
+  function placeHandle() {
+    const rect = item.el.getBoundingClientRect();
+    handle.style.left = `${Math.max(6, Math.round(rect.left))}px`;
+    handle.style.top = `${Math.max(6, Math.round(rect.top - 30))}px`;
+  }
+
+  placeHandle();
+
+  const interval = window.setInterval(placeHandle, 700);
+
+  const down = (event: PointerEvent) => {
+    if (event.button !== 0) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const rect = item.el.getBoundingClientRect();
+    const startMouseX = event.clientX;
+    const startMouseY = event.clientY;
+    const startLeft = rect.left;
+    const startTop = rect.top;
+
+    applyFixed(item.el, {
+      left: Math.round(startLeft),
+      top: Math.round(startTop),
+      width: item.id === "search" ? Math.round(rect.width) : undefined,
+    });
+
+    item.el.style.outline = "2px solid rgba(214,168,79,.95)";
+    item.el.style.outlineOffset = "4px";
+    item.el.style.borderRadius = "12px";
+    handle.style.cursor = "grabbing";
+
+    try {
+      handle.setPointerCapture(event.pointerId);
+    } catch {}
+
+    const move = (e: PointerEvent) => {
+      e.preventDefault();
+
+      const left = Math.max(0, Math.round(startLeft + e.clientX - startMouseX));
+      const top = Math.max(0, Math.round(startTop + e.clientY - startMouseY));
+
+      item.el.style.left = `${left}px`;
+      item.el.style.top = `${top}px`;
+
+      const hLeft = Math.max(6, left);
+      const hTop = Math.max(6, top - 30);
+      handle.style.left = `${hLeft}px`;
+      handle.style.top = `${hTop}px`;
+    };
+
+    const up = (e: PointerEvent) => {
+      try {
+        handle.releasePointerCapture(e.pointerId);
+      } catch {}
+
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", up, true);
+
+      const finalRect = item.el.getBoundingClientRect();
+      const saved = readSaved();
+      saved[item.id] = {
+        left: Math.max(0, Math.round(finalRect.left)),
+        top: Math.max(0, Math.round(finalRect.top)),
+        width: item.id === "search" ? Math.round(finalRect.width) : undefined,
+      };
+      writeSaved(saved);
+
+      item.el.style.outline = "1px dashed rgba(214,168,79,.45)";
+      item.el.style.outlineOffset = "4px";
+      handle.style.cursor = "grab";
+      placeHandle();
+    };
+
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerup", up, true);
+  };
+
+  handle.addEventListener("pointerdown", down, true);
+  document.body.appendChild(handle);
+
+  return () => {
+    window.clearInterval(interval);
+    handle.removeEventListener("pointerdown", down, true);
+    handle.remove();
+  };
+}
+
+function makeResetButton() {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.dataset.feloralDragReset = "true";
+  btn.textContent = "بازنشانی جایگاه هدر";
+  btn.style.position = "fixed";
+  btn.style.left = "18px";
+  btn.style.bottom = "18px";
+  btn.style.zIndex = "99999";
+  btn.style.padding = "10px 14px";
+  btn.style.borderRadius = "999px";
+  btn.style.border = "1px solid rgba(214,168,79,.65)";
+  btn.style.background = "rgba(15,15,18,.92)";
+  btn.style.color = "#f7e6bd";
+  btn.style.fontSize = "12px";
+  btn.style.fontWeight = "900";
+  btn.style.cursor = "pointer";
+  btn.style.boxShadow = "0 12px 30px rgba(0,0,0,.32)";
+  btn.onclick = () => {
+    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem("feloral.header.draggable.items.v1");
+    window.location.reload();
+  };
+  document.body.appendChild(btn);
+}
+
+export function HeaderDragEditor() {
+  useEffect(() => {
+    const saved = readSaved();
+    const cleanups: Array<() => void> = [];
+
+    const install = () => {
+      clearOldHandles();
+
+      const items = getItems();
+
+      for (const item of items) {
+        if (saved[item.id]) applyFixed(item.el, saved[item.id]);
+
+        if (inEditorMode()) {
+          item.el.style.outline = "1px dashed rgba(214,168,79,.45)";
+          item.el.style.outlineOffset = "4px";
+          cleanups.push(makeHandle(item));
+        }
+      }
+
+      if (inEditorMode()) makeResetButton();
+    };
+
+    const t1 = window.setTimeout(install, 350);
+    const t2 = window.setTimeout(install, 1200);
+
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      for (const c of cleanups) c();
+      clearOldHandles();
+    };
+  }, []);
+
+  return null;
+}

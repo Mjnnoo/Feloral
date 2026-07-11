@@ -1,0 +1,388 @@
+
+"use client";
+
+import { useEffect } from "react";
+
+type Candidate = {
+  key: string;
+  value: string;
+  score: number;
+};
+
+const COMMON_KEYS = [
+  "home.hero.background",
+  "home.hero.backgroundImage",
+  "home.hero.bgImage",
+  "home.hero.image",
+  "home.hero.banner",
+  "home.hero.media",
+  "hero.background",
+  "hero.backgroundImage",
+  "hero.image",
+];
+
+function isEditorMode() {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("editor") === "1";
+}
+
+function apiBase() {
+  const envBase = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "";
+  return (envBase || "http://localhost:3000").replace(/\/$/, "");
+}
+
+function normalizeUrl(value: string) {
+  if (!value) return "";
+  const trimmed = String(value).trim();
+  if (!trimmed) return "";
+
+  if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith("data:") || trimmed.startsWith("blob:")) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith("/")) {
+    return `${apiBase()}${trimmed}`;
+  }
+
+  if (/^(uploads|media|files)\//i.test(trimmed)) {
+    return `${apiBase()}/${trimmed}`;
+  }
+
+  return trimmed;
+}
+
+function looksLikeImageUrl(value: string) {
+  const v = String(value || "").toLowerCase();
+  return (
+    v.includes("/uploads/") ||
+    v.includes("/media/") ||
+    v.includes("image/upload") ||
+    v.startsWith("data:image/") ||
+    /\.(png|jpe?g|webp|gif|avif|svg)(\?|#|$)/i.test(v)
+  );
+}
+
+function scorePath(path: string, value: string) {
+  const p = path.toLowerCase();
+  let score = 0;
+
+  if (p.includes("hero")) score += 40;
+  if (p.includes("home")) score += 12;
+  if (p.includes("background") || p.includes("bg")) score += 35;
+  if (p.includes("banner")) score += 20;
+  if (p.includes("image") || p.includes("media") || p.includes("photo")) score += 14;
+  if (looksLikeImageUrl(value)) score += 30;
+  if (p.includes("thumbnail") || p.includes("icon") || p.includes("logo")) score -= 40;
+
+  return score;
+}
+
+function collectCandidates(data: unknown) {
+  const out: Candidate[] = [];
+
+  function walk(node: unknown, path: string) {
+    if (!node) return;
+
+    if (typeof node === "string") {
+      const normalized = normalizeUrl(node);
+      const score = scorePath(path, normalized);
+      if (normalized && looksLikeImageUrl(normalized) && score >= 45) {
+        out.push({ key: path, value: normalized, score });
+      }
+      return;
+    }
+
+    if (Array.isArray(node)) {
+      node.forEach((item, index) => walk(item, `${path}.${index}`));
+      return;
+    }
+
+    if (typeof node === "object") {
+      const record = node as Record<string, unknown>;
+
+      const explicitKey = typeof record.key === "string" ? record.key : "";
+      const maybeValue =
+        typeof record.value === "string"
+          ? record.value
+          : typeof record.url === "string"
+            ? record.url
+            : typeof record.src === "string"
+              ? record.src
+              : typeof record.image === "string"
+                ? record.image
+                : "";
+
+      if (explicitKey && maybeValue) {
+        const normalized = normalizeUrl(maybeValue);
+        const score = scorePath(explicitKey, normalized);
+        if (normalized && looksLikeImageUrl(normalized) && score >= 45) {
+          out.push({ key: explicitKey, value: normalized, score: score + 20 });
+        }
+      }
+
+      for (const [key, value] of Object.entries(record)) {
+        const nextPath = explicitKey && key === "value" ? explicitKey : path ? `${path}.${key}` : key;
+        walk(value, nextPath);
+      }
+    }
+  }
+
+  walk(data, "");
+
+  const unique = new Map<string, Candidate>();
+  for (const item of out) {
+    const current = unique.get(item.key);
+    if (!current || item.score > current.score) unique.set(item.key, item);
+  }
+
+  return Array.from(unique.values()).sort((a, b) => b.score - a.score);
+}
+
+function heroElement() {
+  const selectors = [
+    '[data-feloral-hero="true"]',
+    '[data-feloral-hero]',
+    '[data-section-key="home.hero"]',
+    '[data-cms-section-key="home.hero"]',
+    '[data-feloral-section="home.hero"]',
+    '#hero',
+    '[id*="hero"]',
+    '[class*="hero"]',
+    "main section:first-of-type",
+    "section:first-of-type",
+  ];
+
+  for (const selector of selectors) {
+    const el = document.querySelector(selector) as HTMLElement | null;
+    if (el) return el;
+  }
+
+  return null;
+}
+
+function applyHeroBackground(url: string) {
+  const hero = heroElement();
+  if (!hero || !url) return false;
+
+  hero.dataset.feloralHeroBackgroundRuntime = "true";
+  hero.style.setProperty("background-image", `linear-gradient(90deg, rgba(8,7,6,.48), rgba(8,7,6,.12)), url("${url}")`, "important");
+  hero.style.setProperty("background-size", "cover", "important");
+  hero.style.setProperty("background-position", "center", "important");
+  hero.style.setProperty("background-repeat", "no-repeat", "important");
+  hero.style.setProperty("overflow", "hidden", "important");
+
+  if (hero.offsetHeight < 420) {
+    hero.style.setProperty("min-height", "520px", "important");
+  }
+
+  return true;
+}
+
+async function fetchHomepage() {
+  const base = apiBase();
+  const endpoints = [`${base}/cms/public/homepage`, `${base}/cms/admin/homepage`];
+
+  for (const endpoint of endpoints) {
+    try {
+      const res = await fetch(endpoint, { cache: "no-store" });
+      if (res.ok) return await res.json();
+    } catch {
+      // try next endpoint
+    }
+  }
+
+  return null;
+}
+
+function tokenFromStorage() {
+  const keys = Object.keys(window.localStorage);
+  const preferred = keys.find((key) => /cms|admin|access|token/i.test(key));
+  const all = preferred ? [preferred, ...keys.filter((key) => key !== preferred)] : keys;
+
+  for (const key of all) {
+    const value = window.localStorage.getItem(key) || "";
+    if (!value) continue;
+
+    if (/^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+$/.test(value)) return value;
+
+    try {
+      const parsed = JSON.parse(value);
+      if (typeof parsed === "string" && parsed.includes(".")) return parsed;
+      if (parsed?.accessToken) return String(parsed.accessToken);
+      if (parsed?.token) return String(parsed.token);
+      if (parsed?.access_token) return String(parsed.access_token);
+    } catch {
+      // ignore
+    }
+  }
+
+  return window.prompt("Access Token برای حذف عکس هیرو را وارد کن:") || "";
+}
+
+async function patchContentKey(key: string, value: string) {
+  const token = tokenFromStorage();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const safeKey = encodeURIComponent(key);
+  const bodies = [
+    { value },
+    { content: value },
+    { text: value },
+    { mediaUrl: value },
+    { imageUrl: value },
+  ];
+
+  for (const body of bodies) {
+    try {
+      const res = await fetch(`${apiBase()}/cms/admin/contents/${safeKey}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) return true;
+    } catch {
+      // try next body
+    }
+  }
+
+  return false;
+}
+
+function clearHeroVisual() {
+  const hero = heroElement();
+  if (!hero) return;
+
+  hero.style.removeProperty("background-image");
+  hero.style.removeProperty("background-size");
+  hero.style.removeProperty("background-position");
+  hero.style.removeProperty("background-repeat");
+  delete hero.dataset.feloralHeroBackgroundRuntime;
+}
+
+async function deleteHeroBackground() {
+  const data = await fetchHomepage();
+  const found = collectCandidates(data);
+  const keys = Array.from(new Set([...found.map((item) => item.key), ...COMMON_KEYS]));
+
+  let ok = false;
+  for (const key of keys) {
+    // delete only keys that look related to hero background
+    if (!/hero/i.test(key) || !/(background|bg|image|banner|media|photo)/i.test(key)) continue;
+    const result = await patchContentKey(key, "");
+    ok = ok || result;
+  }
+
+  clearHeroVisual();
+
+  if (ok) {
+    window.alert("عکس پس‌زمینه هیرو حذف شد.");
+  } else {
+    window.alert("عکس از صفحه حذف شد؛ ولی ذخیره در CMS انجام نشد. اگر برگشت، Access Token را دوباره وارد کن.");
+  }
+}
+
+function makeDeleteButton() {
+  if (!isEditorMode()) return;
+  if (document.querySelector("[data-feloral-delete-hero-bg='true']")) return;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.dataset.feloralDeleteHeroBg = "true";
+  button.textContent = "حذف عکس هیرو";
+  button.style.position = "fixed";
+  button.style.left = "18px";
+  button.style.bottom = "68px";
+  button.style.zIndex = "99999";
+  button.style.padding = "10px 14px";
+  button.style.borderRadius = "999px";
+  button.style.border = "1px solid rgba(255,90,90,.65)";
+  button.style.background = "rgba(80,18,18,.92)";
+  button.style.color = "#ffecec";
+  button.style.fontSize = "12px";
+  button.style.fontWeight = "900";
+  button.style.cursor = "pointer";
+  button.style.boxShadow = "0 12px 30px rgba(0,0,0,.32)";
+  button.onclick = () => void deleteHeroBackground();
+
+  document.body.appendChild(button);
+}
+
+function addDeleteNearEditorControl() {
+  if (!isEditorMode()) return;
+
+  const nodes = Array.from(document.querySelectorAll("button, label, div, span")) as HTMLElement[];
+  const target = nodes.find((node) => {
+    const text = (node.textContent || "").replace(/\s+/g, " ").trim();
+    return /پس.?زمینه/.test(text) && /هیرو/.test(text) && !node.closest("[data-feloral-delete-wrapper]");
+  });
+
+  if (!target || document.querySelector("[data-feloral-delete-hero-bg-inline='true']")) return;
+
+  const wrapper = document.createElement("div");
+  wrapper.dataset.feloralDeleteWrapper = "true";
+  wrapper.style.marginTop = "8px";
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.dataset.feloralDeleteHeroBgInline = "true";
+  button.textContent = "حذف عکس";
+  button.style.width = "100%";
+  button.style.padding = "10px 12px";
+  button.style.borderRadius = "12px";
+  button.style.border = "1px solid rgba(255,90,90,.5)";
+  button.style.background = "rgba(80,18,18,.88)";
+  button.style.color = "#ffecec";
+  button.style.fontSize = "12px";
+  button.style.fontWeight = "900";
+  button.style.cursor = "pointer";
+  button.onclick = () => void deleteHeroBackground();
+
+  wrapper.appendChild(button);
+  target.insertAdjacentElement("afterend", wrapper);
+}
+
+export function HeroBackgroundRuntime() {
+  useEffect(() => {
+    let stopped = false;
+
+    const refresh = async () => {
+      const data = await fetchHomepage();
+      if (stopped || !data) return;
+
+      const candidates = collectCandidates(data);
+      const best = candidates[0];
+
+      if (best?.value) {
+        applyHeroBackground(best.value);
+      }
+
+      makeDeleteButton();
+      addDeleteNearEditorControl();
+    };
+
+    void refresh();
+
+    const interval = window.setInterval(() => {
+      if (isEditorMode()) void refresh();
+    }, 1800);
+
+    const observer = new MutationObserver(() => {
+      addDeleteNearEditorControl();
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      stopped = true;
+      window.clearInterval(interval);
+      observer.disconnect();
+    };
+  }, []);
+
+  return null;
+}

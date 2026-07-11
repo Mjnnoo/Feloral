@@ -1,0 +1,118 @@
+import Link from "next/link";
+import { Search, ShoppingCart, UserRound } from "lucide-react";
+import { nav, topLinks } from "@/data/home-v3";
+import type { CmsHomepageResponse } from "@/lib/cms/types";
+import { getText } from "@/lib/cms/content";
+import { CmsEditMarker } from "@/components/cms/cms-edit-marker";
+
+type Props = {
+  cms?: CmsHomepageResponse | null;
+  logoText?: string;
+  accentColor?: string;
+  darkColor?: string;
+};
+
+const navKeyMap: Record<string, string> = {
+  "/": "site.nav.home",
+  "/brands": "site.nav.brands",
+  "/shop": "site.nav.categories",
+  "/offers": "site.nav.offers"
+};
+
+export function SiteHeader({ cms = null, logoText = "FELORAL", accentColor = "#d6a84f", darkColor = "#070707" }: Props) {
+  const shippingNotice = getText(cms, "site.top.shippingNotice", "ارسال رایگان برای خریدهای بالای ۱,۵۰۰,۰۰۰ تومان");
+  const cartLabel = getText(cms, "site.header.cartLabel", "سبد خرید");
+  const loginLabel = getText(cms, "site.header.loginLabel", "ورود / ثبت‌نام");
+  const searchPlaceholder = getText(cms, "site.header.searchPlaceholder", "جستجوی محصول، برند یا دسته...");
+
+  return (
+    <header className="text-white" style={{ backgroundColor: darkColor }}>
+      <div className="luxury-container flex h-9 items-center justify-between text-xs">
+        <p className="flex items-center gap-2 font-medium" style={{ color: accentColor }}>
+          <ShoppingCart size={17} strokeWidth={1.6} />
+          <CmsEditMarker cmsKey="site.top.shippingNotice" sectionKey="site.header" label="پیام بالای هدر">
+            {shippingNotice}
+          </CmsEditMarker>
+        </p>
+
+        <div className="flex items-center gap-7 text-white/70">
+          {topLinks.map((item) => (
+            <Link key={item.href} href={item.href} className="transition hover:opacity-80">
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      <div className="border-t border-white/7">
+        <div className="luxury-container grid min-h-[90px] grid-cols-[1fr_auto_1fr] items-center gap-8">
+          <div className="flex items-center gap-8">
+            <Link href="/cart" className="relative flex items-center gap-2 text-sm font-bold text-white/88 transition hover:opacity-80">
+              <ShoppingCart size={26} strokeWidth={1.6} />
+              <span>
+                <CmsEditMarker cmsKey="site.header.cartLabel" sectionKey="site.header" label="برچسب سبد خرید">
+                  {cartLabel}
+                </CmsEditMarker>
+              </span>
+              <span className="absolute -top-3 right-4 grid h-5 min-w-5 place-items-center rounded-full px-1 text-[11px] text-black" style={{ backgroundColor: accentColor }}>
+                ۳
+              </span>
+            </Link>
+
+            <Link href="/account" className="flex items-center gap-2 text-sm font-bold text-white/88 transition hover:opacity-80">
+              <UserRound size={25} strokeWidth={1.6} />
+              <span>
+                <CmsEditMarker cmsKey="site.header.loginLabel" sectionKey="site.header" label="برچسب ورود و ثبت‌نام">
+                  {loginLabel}
+                </CmsEditMarker>
+              </span>
+            </Link>
+
+            <div className="relative hidden w-[330px] xl:block">
+              <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50" size={22} strokeWidth={1.5} />
+              <input
+                className="h-[52px] w-full rounded-xl border border-white/16 bg-white/[.035] pr-12 text-sm text-white outline-none transition placeholder:text-white/43"
+                placeholder={searchPlaceholder}
+              />
+            </div>
+          </div>
+
+          <Link href="/" className="text-center">
+            <div className="flex items-center justify-center gap-3">
+              <div className="grid h-12 w-12 place-items-center rounded-full border" style={{ borderColor: `${accentColor}73`, color: accentColor }}>
+                ✦
+              </div>
+              <div>
+                <div className="font-serif text-[32px] font-bold tracking-[.18em]" style={{ color: accentColor }}>
+                  {logoText}
+                </div>
+                <div className="mt-1 text-[9px] font-bold tracking-[.32em] opacity-70" style={{ color: accentColor }}>
+                  PERFUME STORE
+                </div>
+              </div>
+            </div>
+          </Link>
+
+          <nav className="flex items-center justify-end gap-12 text-[15px] font-bold">
+            {nav.map((item, index) => {
+              const cmsKey = navKeyMap[item.href] || `site.nav.${index + 1}`;
+              const label = getText(cms, cmsKey, item.label);
+
+              return (
+                <Link key={item.href} href={item.href} className="group relative py-3 text-white/88 transition hover:opacity-80">
+                  <CmsEditMarker cmsKey={cmsKey} sectionKey="site.header" label={`منو ${item.label}`}>
+                    {label}
+                  </CmsEditMarker>
+                  <span
+                    className={`absolute -bottom-1 right-0 h-[2px] rounded-full transition-all ${index === 0 ? "w-full" : "w-0 group-hover:w-full"}`}
+                    style={{ backgroundColor: accentColor }}
+                  />
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+      </div>
+    </header>
+  );
+}
