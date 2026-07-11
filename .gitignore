@@ -1,0 +1,50 @@
+
+# Ignore generated folders everywhere
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+dist/
+**/dist/
+build/
+**/build/
+.turbo/
+**/.turbo/
+.cache/
+**/.cache/
+
+# Ignore env files
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Logs
+*.log
+
+# Ignore generated folders everywhere
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+dist/
+**/dist/
+build/
+**/build/
+.turbo/
+**/.turbo/
+.cache/
+**/.cache/
+
+# Ignore nested git backups
+.git.backup*
+**/.git.backup*
+
+# Ignore env files
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Logs
+*.log
