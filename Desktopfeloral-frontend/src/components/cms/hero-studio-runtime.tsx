@@ -1,5 +1,6 @@
+﻿"use client";
 
-"use client";
+import { canUseCmsEditor } from "@/lib/cms-editor-access";
 
 import { useEffect } from "react";
 
@@ -25,10 +26,10 @@ const OLD_DELETE_KEYS = [
 ];
 
 const HERO_TEXT_KEYS = [
-  { id: "eyebrow", key: "home.hero.eyebrow", label: "بالانویس هیرو" },
-  { id: "title", key: "home.hero.title", label: "عنوان هیرو" },
-  { id: "subtitle", key: "home.hero.subtitle", label: "زیرعنوان هیرو" },
-  { id: "cta", key: "home.hero.cta", label: "دکمه هیرو" },
+  { id: "eyebrow", key: "home.hero.eyebrow", label: "Ø¨Ø§Ù„Ø§Ù†ÙˆÛŒØ³ Ù‡ÛŒØ±Ùˆ" },
+  { id: "title", key: "home.hero.title", label: "Ø¹Ù†ÙˆØ§Ù† Ù‡ÛŒØ±Ùˆ" },
+  { id: "subtitle", key: "home.hero.subtitle", label: "Ø²ÛŒØ±Ø¹Ù†ÙˆØ§Ù† Ù‡ÛŒØ±Ùˆ" },
+  { id: "cta", key: "home.hero.cta", label: "Ø¯Ú©Ù…Ù‡ Ù‡ÛŒØ±Ùˆ" },
 ];
 
 const COMMON_BG_KEYS = [
@@ -51,7 +52,7 @@ const COMMON_BG_KEYS = [
 
 function editorMode() {
   if (typeof window === "undefined") return false;
-  return new URLSearchParams(window.location.search).get("editor") === "1";
+  return canUseCmsEditor();
 }
 
 function apiBase() {
@@ -294,7 +295,7 @@ function tokenFromStorage(silent = true) {
   }
 
   if (silent) return "";
-  return window.prompt("Access Token را وارد کن:") || "";
+  return window.prompt("Access Token Ø±Ø§ ÙˆØ§Ø±Ø¯ Ú©Ù†:") || "";
 }
 
 async function fetchCmsData() {
@@ -570,8 +571,8 @@ async function deleteHeroBackground(targets?: Array<{ el: HTMLElement }>) {
   }
 
   clearHeroBackground(targets);
-  if (ok) window.alert("عکس پس‌زمینه هیرو حذف شد.");
-  else window.alert("عکس از صفحه حذف شد. اگر بعد از رفرش برگشت، یک‌بار Access Token را وارد کن.");
+  if (ok) window.alert("Ø¹Ú©Ø³ Ù¾Ø³â€ŒØ²Ù…ÛŒÙ†Ù‡ Ù‡ÛŒØ±Ùˆ Ø­Ø°Ù Ø´Ø¯.");
+  else window.alert("Ø¹Ú©Ø³ Ø§Ø² ØµÙØ­Ù‡ Ø­Ø°Ù Ø´Ø¯. Ø§Ú¯Ø± Ø¨Ø¹Ø¯ Ø§Ø² Ø±ÙØ±Ø´ Ø¨Ø±Ú¯Ø´ØªØŒ ÛŒÚ©â€ŒØ¨Ø§Ø± Access Token Ø±Ø§ ÙˆØ§Ø±Ø¯ Ú©Ù†.");
 }
 
 function removeOldButtons() {
@@ -581,7 +582,7 @@ function removeOldButtons() {
 
   Array.from(document.querySelectorAll("button")).forEach((button) => {
     const text = (button.textContent || "").trim();
-    if (text === "حذف عکس" && !button.hasAttribute("data-feloral-delete-hero-bg")) button.remove();
+    if (text === "Ø­Ø°Ù Ø¹Ú©Ø³" && !button.hasAttribute("data-feloral-delete-hero-bg")) button.remove();
   });
 }
 
@@ -592,7 +593,7 @@ function makeFloatingDelete(targets?: Array<{ el: HTMLElement }>) {
   const button = document.createElement("button");
   button.type = "button";
   button.dataset.feloralDeleteHeroBg = "true";
-  button.textContent = "حذف عکس هیرو";
+  button.textContent = "Ø­Ø°Ù Ø¹Ú©Ø³ Ù‡ÛŒØ±Ùˆ";
   setImportant(button, "position", "fixed");
   setImportant(button, "left", "18px");
   setImportant(button, "bottom", "68px");
@@ -676,7 +677,7 @@ function makeHeroDragHandles(targets: Array<{ id: string; key: string; label: st
     handle.type = "button";
     handle.dataset.feloralHeroDragHandle = "true";
     handle.dataset.feloralHeroDragHandleId = target.id;
-    handle.textContent = `جابجایی ${target.label}`;
+    handle.textContent = `Ø¬Ø§Ø¨Ø¬Ø§ÛŒÛŒ ${target.label}`;
     setImportant(handle, "position", "fixed");
     setImportant(handle, "z-index", "100005");
     handle.style.padding = "6px 9px";
@@ -799,10 +800,10 @@ function makeHeroNavigation(targets?: Array<{ el: HTMLElement }>) {
     btn.style.backdropFilter = "blur(10px)";
   }
 
-  prev.textContent = "‹";
-  next.textContent = "›";
-  prev.title = "عکس قبلی";
-  next.title = "عکس بعدی";
+  prev.textContent = "â€¹";
+  next.textContent = "â€º";
+  prev.title = "Ø¹Ú©Ø³ Ù‚Ø¨Ù„ÛŒ";
+  next.title = "Ø¹Ú©Ø³ Ø¨Ø¹Ø¯ÛŒ";
 
   prev.onclick = (e) => {
     e.preventDefault();
@@ -830,8 +831,8 @@ function hookExistingHeroNav(hero: HTMLElement, targets?: Array<{ el: HTMLElemen
     const aria = (button.getAttribute("aria-label") || button.getAttribute("title") || "").toLowerCase();
     const combined = `${text} ${aria}`.toLowerCase();
 
-    const isPrev = /قبلی|previous|prev/.test(combined) || text === "‹" || text === "←";
-    const isNext = /بعدی|next/.test(combined) || text === "›" || text === "→";
+    const isPrev = /Ù‚Ø¨Ù„ÛŒ|previous|prev/.test(combined) || text === "â€¹" || text === "â†";
+    const isNext = /Ø¨Ø¹Ø¯ÛŒ|next/.test(combined) || text === "â€º" || text === "â†’";
     if (!isPrev && !isNext) return;
 
     button.dataset.feloralHeroNavHooked = "true";
@@ -933,3 +934,4 @@ export function HeroStudioRuntime() {
 
   return null;
 }
+

@@ -1,5 +1,6 @@
+﻿"use client";
 
-"use client";
+import { canUseCmsEditor } from "@/lib/cms-editor-access";
 
 import { useEffect } from "react";
 
@@ -39,7 +40,7 @@ const COMMON_KEYS = [
 
 function isEditorMode() {
   if (typeof window === "undefined") return false;
-  return new URLSearchParams(window.location.search).get("editor") === "1";
+  return canUseCmsEditor();
 }
 
 function apiBase() {
@@ -343,7 +344,7 @@ function tokenFromStorage(silent = true) {
   }
 
   if (silent) return "";
-  return window.prompt("Access Token را وارد کن:") || "";
+  return window.prompt("Access Token Ø±Ø§ ÙˆØ§Ø±Ø¯ Ú©Ù†:") || "";
 }
 
 async function fetchAllCmsCandidates() {
@@ -415,8 +416,8 @@ async function deleteHeroBackground() {
 
   clearHeroVisual();
 
-  if (ok) window.alert("عکس پس‌زمینه هیرو حذف شد.");
-  else window.alert("عکس از صفحه حذف شد. اگر بعد از رفرش برگشت، یک‌بار Access Token را وارد کن.");
+  if (ok) window.alert("Ø¹Ú©Ø³ Ù¾Ø³â€ŒØ²Ù…ÛŒÙ†Ù‡ Ù‡ÛŒØ±Ùˆ Ø­Ø°Ù Ø´Ø¯.");
+  else window.alert("Ø¹Ú©Ø³ Ø§Ø² ØµÙØ­Ù‡ Ø­Ø°Ù Ø´Ø¯. Ø§Ú¯Ø± Ø¨Ø¹Ø¯ Ø§Ø² Ø±ÙØ±Ø´ Ø¨Ø±Ú¯Ø´ØªØŒ ÛŒÚ©â€ŒØ¨Ø§Ø± Access Token Ø±Ø§ ÙˆØ§Ø±Ø¯ Ú©Ù†.");
 }
 
 function removeInlineDeleteButtons() {
@@ -424,7 +425,7 @@ function removeInlineDeleteButtons() {
 
   Array.from(document.querySelectorAll("button")).forEach((button) => {
     const text = (button.textContent || "").trim();
-    if (text === "حذف عکس" && !button.hasAttribute("data-feloral-delete-hero-bg")) {
+    if (text === "Ø­Ø°Ù Ø¹Ú©Ø³" && !button.hasAttribute("data-feloral-delete-hero-bg")) {
       const parent = button.parentElement;
       button.remove();
       if (parent?.hasAttribute("data-feloral-delete-wrapper")) parent.remove();
@@ -442,7 +443,7 @@ function makeFloatingDeleteButton() {
   const button = document.createElement("button");
   button.type = "button";
   button.dataset.feloralDeleteHeroBg = "true";
-  button.textContent = "حذف عکس هیرو";
+  button.textContent = "Ø­Ø°Ù Ø¹Ú©Ø³ Ù‡ÛŒØ±Ùˆ";
   button.style.position = "fixed";
   button.style.left = "18px";
   button.style.bottom = "68px";
@@ -575,3 +576,4 @@ export function HeroBackgroundRuntime() {
 
   return null;
 }
+

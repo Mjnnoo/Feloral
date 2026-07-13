@@ -1,4 +1,6 @@
-"use client";
+﻿"use client";
+
+import { canUseCmsEditor } from "@/lib/cms-editor-access";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
@@ -82,68 +84,68 @@ const HERO_SLIDES: HeroSlide[] = [
   {
     index: 0,
     backgroundKey: "home.hero.backgroundImage",
-    backgroundLabel: "ویرایش عکس ۱ هیرو",
+    backgroundLabel: "ÙˆÛŒØ±Ø§ÛŒØ´ Ø¹Ú©Ø³ Û± Ù‡ÛŒØ±Ùˆ",
     backgroundButtonClassName: "right-5 top-5",
     eyebrowKey: "home.hero.eyebrow",
     titleKey: "home.hero.title",
     subtitleKey: "home.hero.subtitle",
     ctaKey: "home.hero.cta",
-    defaultEyebrow: "عطرهای اورجینال",
-    defaultTitle: "تجربه‌ای از لوکس بودن در هر لحظه",
-    defaultSubtitle: "معتبرترین برندهای دنیا با ضمانت اصالت کالا",
-    defaultCta: "مشاهده محصولات",
+    defaultEyebrow: "Ø¹Ø·Ø±Ù‡Ø§ÛŒ Ø§ÙˆØ±Ø¬ÛŒÙ†Ø§Ù„",
+    defaultTitle: "ØªØ¬Ø±Ø¨Ù‡â€ŒØ§ÛŒ Ø§Ø² Ù„ÙˆÚ©Ø³ Ø¨ÙˆØ¯Ù† Ø¯Ø± Ù‡Ø± Ù„Ø­Ø¸Ù‡",
+    defaultSubtitle: "Ù…Ø¹ØªØ¨Ø±ØªØ±ÛŒÙ† Ø¨Ø±Ù†Ø¯Ù‡Ø§ÛŒ Ø¯Ù†ÛŒØ§ Ø¨Ø§ Ø¶Ù…Ø§Ù†Øª Ø§ØµØ§Ù„Øª Ú©Ø§Ù„Ø§",
+    defaultCta: "Ù…Ø´Ø§Ù‡Ø¯Ù‡ Ù…Ø­ØµÙˆÙ„Ø§Øª",
   },
   {
     index: 1,
     backgroundKey: "home.hero.backgroundImage2",
-    backgroundLabel: "ویرایش عکس ۲ هیرو",
+    backgroundLabel: "ÙˆÛŒØ±Ø§ÛŒØ´ Ø¹Ú©Ø³ Û² Ù‡ÛŒØ±Ùˆ",
     backgroundButtonClassName: "right-5 top-16",
     eyebrowKey: "home.hero.slide2.eyebrow",
     titleKey: "home.hero.slide2.title",
     subtitleKey: "home.hero.slide2.subtitle",
     ctaKey: "home.hero.slide2.cta",
-    defaultEyebrow: "رایحه‌های زنانه",
-    defaultTitle: "لطافت صورتی، برای لحظه‌های خاص",
-    defaultSubtitle: "ترکیبی از گل‌های لطیف، حس تمیزی و زیبایی ماندگار",
-    defaultCta: "دیدن کالکشن زنانه",
+    defaultEyebrow: "Ø±Ø§ÛŒØ­Ù‡â€ŒÙ‡Ø§ÛŒ Ø²Ù†Ø§Ù†Ù‡",
+    defaultTitle: "Ù„Ø·Ø§ÙØª ØµÙˆØ±ØªÛŒØŒ Ø¨Ø±Ø§ÛŒ Ù„Ø­Ø¸Ù‡â€ŒÙ‡Ø§ÛŒ Ø®Ø§Øµ",
+    defaultSubtitle: "ØªØ±Ú©ÛŒØ¨ÛŒ Ø§Ø² Ú¯Ù„â€ŒÙ‡Ø§ÛŒ Ù„Ø·ÛŒÙØŒ Ø­Ø³ ØªÙ…ÛŒØ²ÛŒ Ùˆ Ø²ÛŒØ¨Ø§ÛŒÛŒ Ù…Ø§Ù†Ø¯Ú¯Ø§Ø±",
+    defaultCta: "Ø¯ÛŒØ¯Ù† Ú©Ø§Ù„Ú©Ø´Ù† Ø²Ù†Ø§Ù†Ù‡",
   },
   {
     index: 2,
     backgroundKey: "home.hero.backgroundImage3",
-    backgroundLabel: "ویرایش عکس ۳ هیرو",
+    backgroundLabel: "ÙˆÛŒØ±Ø§ÛŒØ´ Ø¹Ú©Ø³ Û³ Ù‡ÛŒØ±Ùˆ",
     backgroundButtonClassName: "right-5 top-28",
     eyebrowKey: "home.hero.slide3.eyebrow",
     titleKey: "home.hero.slide3.title",
     subtitleKey: "home.hero.slide3.subtitle",
     ctaKey: "home.hero.slide3.cta",
-    defaultEyebrow: "رایحه‌های خاص",
-    defaultTitle: "امضای جسورانه با رایحه‌ای عمیق",
-    defaultSubtitle: "انتخابی برای سلیقه‌های متفاوت، لوکس و ماندگار",
-    defaultCta: "کشف رایحه‌های خاص",
+    defaultEyebrow: "Ø±Ø§ÛŒØ­Ù‡â€ŒÙ‡Ø§ÛŒ Ø®Ø§Øµ",
+    defaultTitle: "Ø§Ù…Ø¶Ø§ÛŒ Ø¬Ø³ÙˆØ±Ø§Ù†Ù‡ Ø¨Ø§ Ø±Ø§ÛŒØ­Ù‡â€ŒØ§ÛŒ Ø¹Ù…ÛŒÙ‚",
+    defaultSubtitle: "Ø§Ù†ØªØ®Ø§Ø¨ÛŒ Ø¨Ø±Ø§ÛŒ Ø³Ù„ÛŒÙ‚Ù‡â€ŒÙ‡Ø§ÛŒ Ù…ØªÙØ§ÙˆØªØŒ Ù„ÙˆÚ©Ø³ Ùˆ Ù…Ø§Ù†Ø¯Ú¯Ø§Ø±",
+    defaultCta: "Ú©Ø´Ù Ø±Ø§ÛŒØ­Ù‡â€ŒÙ‡Ø§ÛŒ Ø®Ø§Øµ",
   },
   {
     index: 3,
     backgroundKey: "home.hero.backgroundImage4",
-    backgroundLabel: "ویرایش عکس ۴ هیرو",
+    backgroundLabel: "ÙˆÛŒØ±Ø§ÛŒØ´ Ø¹Ú©Ø³ Û´ Ù‡ÛŒØ±Ùˆ",
     backgroundButtonClassName: "right-5 top-40",
     eyebrowKey: "home.hero.slide4.eyebrow",
     titleKey: "home.hero.slide4.title",
     subtitleKey: "home.hero.slide4.subtitle",
     ctaKey: "home.hero.slide4.cta",
-    defaultEyebrow: "پیشنهاد ویژه",
-    defaultTitle: "زیبایی را با انتخابی هوشمند شروع کن",
-    defaultSubtitle: "محصولات منتخب فلورال برای مراقبت، درخشش و اعتمادبه‌نفس",
-    defaultCta: "خرید پیشنهادها",
+    defaultEyebrow: "Ù¾ÛŒØ´Ù†Ù‡Ø§Ø¯ ÙˆÛŒÚ˜Ù‡",
+    defaultTitle: "Ø²ÛŒØ¨Ø§ÛŒÛŒ Ø±Ø§ Ø¨Ø§ Ø§Ù†ØªØ®Ø§Ø¨ÛŒ Ù‡ÙˆØ´Ù…Ù†Ø¯ Ø´Ø±ÙˆØ¹ Ú©Ù†",
+    defaultSubtitle: "Ù…Ø­ØµÙˆÙ„Ø§Øª Ù…Ù†ØªØ®Ø¨ ÙÙ„ÙˆØ±Ø§Ù„ Ø¨Ø±Ø§ÛŒ Ù…Ø±Ø§Ù‚Ø¨ØªØŒ Ø¯Ø±Ø®Ø´Ø´ Ùˆ Ø§Ø¹ØªÙ…Ø§Ø¯Ø¨Ù‡â€ŒÙ†ÙØ³",
+    defaultCta: "Ø®Ø±ÛŒØ¯ Ù¾ÛŒØ´Ù†Ù‡Ø§Ø¯Ù‡Ø§",
   },
 ];
 
 const LEGACY_BG_KEYS = ["home.hero.background", "home.hero.image", "home.hero.bannerImage"];
 
 const DRAG_ITEMS = [
-  { id: "eyebrow", label: "بالانویس هیرو", minFont: 10, maxFont: 34 },
-  { id: "title", label: "عنوان هیرو", minFont: 20, maxFont: 86 },
-  { id: "subtitle", label: "زیرعنوان هیرو", minFont: 11, maxFont: 38 },
-  { id: "cta", label: "دکمه هیرو", minFont: 10, maxFont: 26 },
+  { id: "eyebrow", label: "Ø¨Ø§Ù„Ø§Ù†ÙˆÛŒØ³ Ù‡ÛŒØ±Ùˆ", minFont: 10, maxFont: 34 },
+  { id: "title", label: "Ø¹Ù†ÙˆØ§Ù† Ù‡ÛŒØ±Ùˆ", minFont: 20, maxFont: 86 },
+  { id: "subtitle", label: "Ø²ÛŒØ±Ø¹Ù†ÙˆØ§Ù† Ù‡ÛŒØ±Ùˆ", minFont: 11, maxFont: 38 },
+  { id: "cta", label: "Ø¯Ú©Ù…Ù‡ Ù‡ÛŒØ±Ùˆ", minFont: 10, maxFont: 26 },
 ];
 
 const DEFAULT_STROKE: TextStroke = {
@@ -154,7 +156,7 @@ const DEFAULT_STROKE: TextStroke = {
 
 function isEditorMode() {
   if (typeof window === "undefined") return false;
-  return new URLSearchParams(window.location.search).get("editor") === "1";
+  return canUseCmsEditor();
 }
 
 function getApiBaseUrl() {
@@ -627,7 +629,7 @@ function getTokenFromStorage(silent = true) {
 
   if (silent) return "";
 
-  return window.prompt("Access Token را وارد کن:") || "";
+  return window.prompt("Access Token Ø±Ø§ ÙˆØ§Ø±Ø¯ Ú©Ù†:") || "";
 }
 
 function showSaveStatus(text: string, ok = true) {
@@ -667,9 +669,9 @@ async function persistLayout(map: DragMap) {
   const ok = await saveContentKey(HERO_LAYOUT_CMS_KEY, JSON.stringify(map));
 
   if (ok) {
-    showSaveStatus("جایگاه هیرو ذخیره شد", true);
+    showSaveStatus("Ø¬Ø§ÛŒÚ¯Ø§Ù‡ Ù‡ÛŒØ±Ùˆ Ø°Ø®ÛŒØ±Ù‡ Ø´Ø¯", true);
   } else {
-    showSaveStatus("در مرورگر ذخیره شد؛ برای ذخیره CMS توکن لازم است", false);
+    showSaveStatus("Ø¯Ø± Ù…Ø±ÙˆØ±Ú¯Ø± Ø°Ø®ÛŒØ±Ù‡ Ø´Ø¯Ø› Ø¨Ø±Ø§ÛŒ Ø°Ø®ÛŒØ±Ù‡ CMS ØªÙˆÚ©Ù† Ù„Ø§Ø²Ù… Ø§Ø³Øª", false);
   }
 }
 
@@ -727,7 +729,7 @@ function installHeroDragAndResizeHandles() {
     moveHandle.type = "button";
     moveHandle.dataset.feloralHeroDragHandle = "true";
     moveHandle.dataset.feloralHeroDragHandleId = item.id;
-    moveHandle.textContent = `جابجایی ${item.label}`;
+    moveHandle.textContent = `Ø¬Ø§Ø¨Ø¬Ø§ÛŒÛŒ ${item.label}`;
 
     setImportant(moveHandle, "position", "fixed");
     setImportant(moveHandle, "z-index", "100005");
@@ -748,8 +750,8 @@ function installHeroDragAndResizeHandles() {
     resizeHandle.type = "button";
     resizeHandle.dataset.feloralHeroResizeHandle = "true";
     resizeHandle.dataset.feloralHeroResizeHandleId = item.id;
-    resizeHandle.textContent = "↔";
-    resizeHandle.title = "برای کوچک و بزرگ کردن باکس و فونت بکش";
+    resizeHandle.textContent = "â†”";
+    resizeHandle.title = "Ø¨Ø±Ø§ÛŒ Ú©ÙˆÚ†Ú© Ùˆ Ø¨Ø²Ø±Ú¯ Ú©Ø±Ø¯Ù† Ø¨Ø§Ú©Ø³ Ùˆ ÙÙˆÙ†Øª Ø¨Ú©Ø´";
 
     setImportant(resizeHandle, "position", "fixed");
     setImportant(resizeHandle, "z-index", "100006");
@@ -945,7 +947,7 @@ function removeOldRuntimeDom() {
   Array.from(document.querySelectorAll("button")).forEach((button) => {
     const text = (button.textContent || "").trim();
 
-    if (text === "حذف عکس" || text === "حذف عکس هیرو") {
+    if (text === "Ø­Ø°Ù Ø¹Ú©Ø³" || text === "Ø­Ø°Ù Ø¹Ú©Ø³ Ù‡ÛŒØ±Ùˆ") {
       button.remove();
     }
   });
@@ -1275,7 +1277,7 @@ export function CmsHomeHero({ cms }: Props) {
 
               <div className="absolute inset-0 z-[2] flex items-center justify-center overflow-hidden">
   <div className="relative inline-flex max-h-[96%] max-w-[96%] items-center justify-center">
-    {/* هاله بلور پشت عکس اصلی برای اینکه لبه‌ها نرم شوند */}
+    {/* Ù‡Ø§Ù„Ù‡ Ø¨Ù„ÙˆØ± Ù¾Ø´Øª Ø¹Ú©Ø³ Ø§ØµÙ„ÛŒ Ø¨Ø±Ø§ÛŒ Ø§ÛŒÙ†Ú©Ù‡ Ù„Ø¨Ù‡â€ŒÙ‡Ø§ Ù†Ø±Ù… Ø´ÙˆÙ†Ø¯ */}
     <img
       key={`hero-main-glow-${activeIndex}-${currentBackground}`}
       src={currentBackground}
@@ -1288,7 +1290,7 @@ export function CmsHomeHero({ cms }: Props) {
       suppressHydrationWarning
     />
 
-    {/* خود عکس اصلی با محوشدن چهار طرف */}
+    {/* Ø®ÙˆØ¯ Ø¹Ú©Ø³ Ø§ØµÙ„ÛŒ Ø¨Ø§ Ù…Ø­ÙˆØ´Ø¯Ù† Ú†Ù‡Ø§Ø± Ø·Ø±Ù */}
     <img
       key={`hero-main-${activeIndex}-${currentBackground}`}
       src={currentBackground}
@@ -1333,7 +1335,7 @@ export function CmsHomeHero({ cms }: Props) {
             type="button"
             onClick={() => goToSlide(activeIndex - 1)}
             className="absolute right-6 top-1/2 z-20 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full text-white transition hover:bg-white/10"
-            aria-label="تصویر قبلی هیرو"
+            aria-label="ØªØµÙˆÛŒØ± Ù‚Ø¨Ù„ÛŒ Ù‡ÛŒØ±Ùˆ"
           >
             <ChevronRight size={32} strokeWidth={1.6} />
           </button>
@@ -1342,7 +1344,7 @@ export function CmsHomeHero({ cms }: Props) {
             type="button"
             onClick={() => goToSlide(activeIndex + 1)}
             className="absolute left-6 top-1/2 z-20 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full text-white transition hover:bg-white/10"
-            aria-label="تصویر بعدی هیرو"
+            aria-label="ØªØµÙˆÛŒØ± Ø¨Ø¹Ø¯ÛŒ Ù‡ÛŒØ±Ùˆ"
           >
             <ChevronLeft size={32} strokeWidth={1.6} />
           </button>
@@ -1357,7 +1359,7 @@ export function CmsHomeHero({ cms }: Props) {
                   ...getTextStrokeStyle(activeSlide.eyebrowKey),
                 }}
               >
-                <CmsEditMarker cmsKey={activeSlide.eyebrowKey} sectionKey="home.hero" label={`متن کوچک هیرو ${activeIndex + 1}`}>
+                <CmsEditMarker cmsKey={activeSlide.eyebrowKey} sectionKey="home.hero" label={`Ù…ØªÙ† Ú©ÙˆÚ†Ú© Ù‡ÛŒØ±Ùˆ ${activeIndex + 1}`}>
                   {eyebrow}
                 </CmsEditMarker>
               </p>
@@ -1367,7 +1369,7 @@ export function CmsHomeHero({ cms }: Props) {
                 className="mt-4 text-[46px] font-black leading-[1.34] tracking-[-.02em] text-white"
                 style={getTextStrokeStyle(activeSlide.titleKey)}
               >
-                <CmsEditMarker cmsKey={activeSlide.titleKey} sectionKey="home.hero" label={`عنوان اصلی هیرو ${activeIndex + 1}`}>
+                <CmsEditMarker cmsKey={activeSlide.titleKey} sectionKey="home.hero" label={`Ø¹Ù†ÙˆØ§Ù† Ø§ØµÙ„ÛŒ Ù‡ÛŒØ±Ùˆ ${activeIndex + 1}`}>
                   {title}
                 </CmsEditMarker>
               </h1>
@@ -1377,7 +1379,7 @@ export function CmsHomeHero({ cms }: Props) {
                 className="mt-4 whitespace-pre-line text-[19px] font-medium leading-9 text-white/88"
                 style={getTextStrokeStyle(activeSlide.subtitleKey)}
               >
-                <CmsEditMarker cmsKey={activeSlide.subtitleKey} sectionKey="home.hero" label={`زیرعنوان هیرو ${activeIndex + 1}`}>
+                <CmsEditMarker cmsKey={activeSlide.subtitleKey} sectionKey="home.hero" label={`Ø²ÛŒØ±Ø¹Ù†ÙˆØ§Ù† Ù‡ÛŒØ±Ùˆ ${activeIndex + 1}`}>
                   {subtitle}
                 </CmsEditMarker>
               </p>
@@ -1391,7 +1393,7 @@ export function CmsHomeHero({ cms }: Props) {
                   ...getTextStrokeStyle(activeSlide.ctaKey),
                 }}
               >
-                <CmsEditMarker cmsKey={activeSlide.ctaKey} sectionKey="home.hero" label={`متن دکمه هیرو ${activeIndex + 1}`}>
+                <CmsEditMarker cmsKey={activeSlide.ctaKey} sectionKey="home.hero" label={`Ù…ØªÙ† Ø¯Ú©Ù…Ù‡ Ù‡ÛŒØ±Ùˆ ${activeIndex + 1}`}>
                   {cta}
                 </CmsEditMarker>
                 <ChevronLeft size={18} />
@@ -1410,7 +1412,7 @@ export function CmsHomeHero({ cms }: Props) {
                   backgroundColor: slide.index === activeIndex ? accentColor : "rgba(255,255,255,.38)",
                   transform: slide.index === activeIndex ? "scale(1.22)" : "scale(1)",
                 }}
-                aria-label={`تصویر ${slide.index + 1} هیرو`}
+                aria-label={`ØªØµÙˆÛŒØ± ${slide.index + 1} Ù‡ÛŒØ±Ùˆ`}
               />
             ))}
           </div>

@@ -1,4 +1,6 @@
-"use client";
+﻿"use client";
+
+import { canUseCmsEditor } from "@/lib/cms-editor-access";
 
 import Link from "next/link";
 import { Search, ShoppingCart, UserRound } from "lucide-react";
@@ -127,7 +129,7 @@ function getImageFromUploadPayload(payload: unknown) {
 
 function isEditorMode() {
   if (typeof window === "undefined") return false;
-  return new URLSearchParams(window.location.search).get("editor") === "1";
+  return canUseCmsEditor();
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -231,14 +233,14 @@ function getTokenFromStorage(silent = false) {
   }
 
   if (silent) return "";
-  return window.prompt("Access Token را وارد کن:") || "";
+  return window.prompt("Access Token Ø±Ø§ ÙˆØ§Ø±Ø¯ Ú©Ù†:") || "";
 }
 
 async function saveContentKey(key: string, value: string, options?: { silentToken?: boolean }) {
   const token = getTokenFromStorage(Boolean(options?.silentToken));
 
   if (!token) {
-    throw new Error("توکن ادمین پیدا نشد");
+    throw new Error("ØªÙˆÚ©Ù† Ø§Ø¯Ù…ÛŒÙ† Ù¾ÛŒØ¯Ø§ Ù†Ø´Ø¯");
   }
 
   const headers: Record<string, string> = {
@@ -298,14 +300,14 @@ async function saveContentKey(key: string, value: string, options?: { silentToke
     if (response?.ok) return true;
   }
 
-  throw new Error("ذخیره محتوا انجام نشد");
+  throw new Error("Ø°Ø®ÛŒØ±Ù‡ Ù…Ø­ØªÙˆØ§ Ø§Ù†Ø¬Ø§Ù… Ù†Ø´Ø¯");
 }
 
 async function uploadLogoFile(file: File) {
   const token = getTokenFromStorage();
 
   if (!token) {
-    throw new Error("توکن ادمین پیدا نشد");
+    throw new Error("ØªÙˆÚ©Ù† Ø§Ø¯Ù…ÛŒÙ† Ù¾ÛŒØ¯Ø§ Ù†Ø´Ø¯");
   }
 
   const formData = new FormData();
@@ -332,7 +334,7 @@ async function uploadLogoFile(file: File) {
     if (image) return image;
   }
 
-  throw new Error("آپلود عکس لوگو انجام نشد");
+  throw new Error("Ø¢Ù¾Ù„ÙˆØ¯ Ø¹Ú©Ø³ Ù„ÙˆÚ¯Ùˆ Ø§Ù†Ø¬Ø§Ù… Ù†Ø´Ø¯");
 }
 
 function DraggableHeaderItem({
@@ -612,9 +614,9 @@ export function SiteHeader({
 
     try {
       await saveContentKey(HEADER_LAYOUT_CMS_KEY, "{}");
-      setLogoStatus("جای همه آیتم‌های هدر ریست و ذخیره شد");
+      setLogoStatus("Ø¬Ø§ÛŒ Ù‡Ù…Ù‡ Ø¢ÛŒØªÙ…â€ŒÙ‡Ø§ÛŒ Ù‡Ø¯Ø± Ø±ÛŒØ³Øª Ùˆ Ø°Ø®ÛŒØ±Ù‡ Ø´Ø¯");
     } catch {
-      setLogoStatus("جای همه آیتم‌ها در همین مرورگر ریست شد");
+      setLogoStatus("Ø¬Ø§ÛŒ Ù‡Ù…Ù‡ Ø¢ÛŒØªÙ…â€ŒÙ‡Ø§ Ø¯Ø± Ù‡Ù…ÛŒÙ† Ù…Ø±ÙˆØ±Ú¯Ø± Ø±ÛŒØ³Øª Ø´Ø¯");
     }
   };
 
@@ -624,9 +626,9 @@ export function SiteHeader({
 
     try {
       await saveContentKey(LOGO_SIZE_CMS_KEY, String(DEFAULT_LOGO_SIZE));
-      setLogoStatus("سایز لوگو برای همه ذخیره شد");
+      setLogoStatus("Ø³Ø§ÛŒØ² Ù„ÙˆÚ¯Ùˆ Ø¨Ø±Ø§ÛŒ Ù‡Ù…Ù‡ Ø°Ø®ÛŒØ±Ù‡ Ø´Ø¯");
     } catch {
-      setLogoStatus("سایز لوگو در همین مرورگر ذخیره شد");
+      setLogoStatus("Ø³Ø§ÛŒØ² Ù„ÙˆÚ¯Ùˆ Ø¯Ø± Ù‡Ù…ÛŒÙ† Ù…Ø±ÙˆØ±Ú¯Ø± Ø°Ø®ÛŒØ±Ù‡ Ø´Ø¯");
     }
   };
 
@@ -641,20 +643,20 @@ export function SiteHeader({
 
     setLogoSize(next);
     saveLogoSizeLocal(next);
-    setLogoStatus("در حال ذخیره سایز...");
+    setLogoStatus("Ø¯Ø± Ø­Ø§Ù„ Ø°Ø®ÛŒØ±Ù‡ Ø³Ø§ÛŒØ²...");
 
     try {
       await saveContentKey(LOGO_SIZE_CMS_KEY, String(next));
-      setLogoStatus("سایز لوگو برای همیشه ذخیره شد");
+      setLogoStatus("Ø³Ø§ÛŒØ² Ù„ÙˆÚ¯Ùˆ Ø¨Ø±Ø§ÛŒ Ù‡Ù…ÛŒØ´Ù‡ Ø°Ø®ÛŒØ±Ù‡ Ø´Ø¯");
     } catch (error) {
-      setLogoStatus(error instanceof Error ? error.message : "سایز فقط در مرورگر ذخیره شد");
+      setLogoStatus(error instanceof Error ? error.message : "Ø³Ø§ÛŒØ² ÙÙ‚Ø· Ø¯Ø± Ù…Ø±ÙˆØ±Ú¯Ø± Ø°Ø®ÛŒØ±Ù‡ Ø´Ø¯");
     }
   };
 
   const shippingNotice = getText(
     liveCms,
     "site.top.shippingNotice",
-    "ارسال رایگان برای خریدهای بالای ۱,۵۰۰,۰۰۰ تومان",
+    "Ø§Ø±Ø³Ø§Ù„ Ø±Ø§ÛŒÚ¯Ø§Ù† Ø¨Ø±Ø§ÛŒ Ø®Ø±ÛŒØ¯Ù‡Ø§ÛŒ Ø¨Ø§Ù„Ø§ÛŒ Û±,ÛµÛ°Û°,Û°Û°Û° ØªÙˆÙ…Ø§Ù†",
   );
 
   const cmsLogoTextValue = getText(liveCms, LOGO_CMS_KEY, logoText || "FELORAL");
@@ -663,9 +665,9 @@ export function SiteHeader({
   const logoImage = isImageUrl(logoValue) ? normalizeAssetUrl(logoValue) : "";
   const logoTitle = logoImage ? logoText || "Feloral" : logoValue;
 
-  const cartLabel = getText(liveCms, "site.header.cartLabel", "سبد خرید");
-  const loginLabel = getText(liveCms, "site.header.loginLabel", "ورود / ثبت‌نام");
-  const searchPlaceholder = getText(liveCms, "site.header.searchPlaceholder", "جستجوی محصول، برند یا دسته...");
+  const cartLabel = getText(liveCms, "site.header.cartLabel", "Ø³Ø¨Ø¯ Ø®Ø±ÛŒØ¯");
+  const loginLabel = getText(liveCms, "site.header.loginLabel", "ÙˆØ±ÙˆØ¯ / Ø«Ø¨Øªâ€ŒÙ†Ø§Ù…");
+  const searchPlaceholder = getText(liveCms, "site.header.searchPlaceholder", "Ø¬Ø³ØªØ¬ÙˆÛŒ Ù…Ø­ØµÙˆÙ„ØŒ Ø¨Ø±Ù†Ø¯ ÛŒØ§ Ø¯Ø³ØªÙ‡...");
 
   const logoSlotStyle: CSSProperties = {
     width: "190px",
@@ -699,20 +701,20 @@ export function SiteHeader({
     const clean = draftLogoText.trim();
 
     if (!clean) {
-      setLogoStatus("متن لوگو خالی است");
+      setLogoStatus("Ù…ØªÙ† Ù„ÙˆÚ¯Ùˆ Ø®Ø§Ù„ÛŒ Ø§Ø³Øª");
       return;
     }
 
     setLogoSaving(true);
-    setLogoStatus("در حال ذخیره متن...");
+    setLogoStatus("Ø¯Ø± Ø­Ø§Ù„ Ø°Ø®ÛŒØ±Ù‡ Ù…ØªÙ†...");
 
     try {
       await saveContentKey(LOGO_CMS_KEY, clean);
       setLocalLogoValue(clean);
       saveLogoValueLocal(clean);
-      setLogoStatus("متن لوگو برای همیشه ذخیره شد");
+      setLogoStatus("Ù…ØªÙ† Ù„ÙˆÚ¯Ùˆ Ø¨Ø±Ø§ÛŒ Ù‡Ù…ÛŒØ´Ù‡ Ø°Ø®ÛŒØ±Ù‡ Ø´Ø¯");
     } catch (error) {
-      setLogoStatus(error instanceof Error ? error.message : "ذخیره متن انجام نشد");
+      setLogoStatus(error instanceof Error ? error.message : "Ø°Ø®ÛŒØ±Ù‡ Ù…ØªÙ† Ø§Ù†Ø¬Ø§Ù… Ù†Ø´Ø¯");
     } finally {
       setLogoSaving(false);
     }
@@ -724,7 +726,7 @@ export function SiteHeader({
     const preview = URL.createObjectURL(file);
     setLocalLogoValue(preview);
     setLogoSaving(true);
-    setLogoStatus("در حال آپلود و ذخیره عکس...");
+    setLogoStatus("Ø¯Ø± Ø­Ø§Ù„ Ø¢Ù¾Ù„ÙˆØ¯ Ùˆ Ø°Ø®ÛŒØ±Ù‡ Ø¹Ú©Ø³...");
 
     try {
       const image = await uploadLogoFile(file);
@@ -733,9 +735,9 @@ export function SiteHeader({
       setLocalLogoValue(image);
       saveLogoValueLocal(image);
       setDraftLogoText("");
-      setLogoStatus("عکس لوگو برای همیشه ذخیره شد");
+      setLogoStatus("Ø¹Ú©Ø³ Ù„ÙˆÚ¯Ùˆ Ø¨Ø±Ø§ÛŒ Ù‡Ù…ÛŒØ´Ù‡ Ø°Ø®ÛŒØ±Ù‡ Ø´Ø¯");
     } catch (error) {
-      setLogoStatus(error instanceof Error ? error.message : "آپلود عکس انجام نشد");
+      setLogoStatus(error instanceof Error ? error.message : "Ø¢Ù¾Ù„ÙˆØ¯ Ø¹Ú©Ø³ Ø§Ù†Ø¬Ø§Ù… Ù†Ø´Ø¯");
     } finally {
       setLogoSaving(false);
       URL.revokeObjectURL(preview);
@@ -744,20 +746,20 @@ export function SiteHeader({
 
   const saveCurrentLogoImage = async () => {
     if (!logoImage) {
-      setLogoStatus("اول عکس لوگو را انتخاب کن");
+      setLogoStatus("Ø§ÙˆÙ„ Ø¹Ú©Ø³ Ù„ÙˆÚ¯Ùˆ Ø±Ø§ Ø§Ù†ØªØ®Ø§Ø¨ Ú©Ù†");
       return;
     }
 
     setLogoSaving(true);
-    setLogoStatus("در حال ذخیره عکس...");
+    setLogoStatus("Ø¯Ø± Ø­Ø§Ù„ Ø°Ø®ÛŒØ±Ù‡ Ø¹Ú©Ø³...");
 
     try {
       await saveContentKey(LOGO_CMS_KEY, logoImage);
       setLocalLogoValue(logoImage);
       saveLogoValueLocal(logoImage);
-      setLogoStatus("عکس لوگو برای همیشه ذخیره شد");
+      setLogoStatus("Ø¹Ú©Ø³ Ù„ÙˆÚ¯Ùˆ Ø¨Ø±Ø§ÛŒ Ù‡Ù…ÛŒØ´Ù‡ Ø°Ø®ÛŒØ±Ù‡ Ø´Ø¯");
     } catch (error) {
-      setLogoStatus(error instanceof Error ? error.message : "ذخیره عکس انجام نشد");
+      setLogoStatus(error instanceof Error ? error.message : "Ø°Ø®ÛŒØ±Ù‡ Ø¹Ú©Ø³ Ø§Ù†Ø¬Ø§Ù… Ù†Ø´Ø¯");
     } finally {
       setLogoSaving(false);
     }
@@ -766,7 +768,7 @@ export function SiteHeader({
   const clearLocalLogo = () => {
     setLocalLogoValue("");
     saveLogoValueLocal("");
-    setLogoStatus("لوگوی ذخیره‌شده در مرورگر پاک شد؛ مقدار CMS نمایش داده می‌شود");
+    setLogoStatus("Ù„ÙˆÚ¯ÙˆÛŒ Ø°Ø®ÛŒØ±Ù‡â€ŒØ´Ø¯Ù‡ Ø¯Ø± Ù…Ø±ÙˆØ±Ú¯Ø± Ù¾Ø§Ú© Ø´Ø¯Ø› Ù…Ù‚Ø¯Ø§Ø± CMS Ù†Ù…Ø§ÛŒØ´ Ø¯Ø§Ø¯Ù‡ Ù…ÛŒâ€ŒØ´ÙˆØ¯");
   };
 
   return (
@@ -778,10 +780,10 @@ export function SiteHeader({
             onClick={resetAll}
             className="rounded-xl border border-white/15 px-3 py-2 text-[11px] font-black text-white/80"
           >
-            ریست جای همه
+            Ø±ÛŒØ³Øª Ø¬Ø§ÛŒ Ù‡Ù…Ù‡
           </button>
           <span className="px-2 py-2 text-[11px] font-bold text-white/45">
-            روی هر آیتم نگه‌دار و بکش
+            Ø±ÙˆÛŒ Ù‡Ø± Ø¢ÛŒØªÙ… Ù†Ú¯Ù‡â€ŒØ¯Ø§Ø± Ùˆ Ø¨Ú©Ø´
           </span>
         </div>
       ) : null}
@@ -794,12 +796,12 @@ export function SiteHeader({
             layout={layout}
             onStartDrag={startDrag}
             className="inline-flex"
-            title="نگه‌دار و جابه‌جا کن"
+            title="Ù†Ú¯Ù‡â€ŒØ¯Ø§Ø± Ùˆ Ø¬Ø§Ø¨Ù‡â€ŒØ¬Ø§ Ú©Ù†"
           >
             <CmsEditMarker
               cmsKey="site.top.shippingNotice"
               sectionKey="site.header"
-              label="اطلاعیه ارسال"
+              label="Ø§Ø·Ù„Ø§Ø¹ÛŒÙ‡ Ø§Ø±Ø³Ø§Ù„"
               value={shippingNotice}
             >
               <span className="inline-flex items-center gap-2 leading-none">
@@ -830,12 +832,12 @@ export function SiteHeader({
                 layout={layout}
                 onStartDrag={startDrag}
                 className="inline-flex"
-                title="نگه‌دار و جابه‌جا کن"
+                title="Ù†Ú¯Ù‡â€ŒØ¯Ø§Ø± Ùˆ Ø¬Ø§Ø¨Ù‡â€ŒØ¬Ø§ Ú©Ù†"
               >
                 <CmsEditMarker
                   cmsKey={cmsKey}
                   sectionKey="site.header"
-                  label={`لینک بالای هدر ${link.label}`}
+                  label={`Ù„ÛŒÙ†Ú© Ø¨Ø§Ù„Ø§ÛŒ Ù‡Ø¯Ø± ${link.label}`}
                   value={label}
                 >
                   <a
@@ -868,7 +870,7 @@ export function SiteHeader({
               layout={layout}
               onStartDrag={startDrag}
               className="inline-flex"
-              title="نگه‌دار و جابه‌جا کن"
+              title="Ù†Ú¯Ù‡â€ŒØ¯Ø§Ø± Ùˆ Ø¬Ø§Ø¨Ù‡â€ŒØ¬Ø§ Ú©Ù†"
             >
               <Link
                 data-feloral-header-cart="left"
@@ -880,7 +882,7 @@ export function SiteHeader({
               >
                 <ShoppingCart size={26} strokeWidth={1.6} />
                 <span>
-                  <CmsEditMarker cmsKey="site.header.cartLabel" sectionKey="site.header" label="برچسب سبد خرید">
+                  <CmsEditMarker cmsKey="site.header.cartLabel" sectionKey="site.header" label="Ø¨Ø±Ú†Ø³Ø¨ Ø³Ø¨Ø¯ Ø®Ø±ÛŒØ¯">
                     {cartLabel}
                   </CmsEditMarker>
                 </span>
@@ -888,7 +890,7 @@ export function SiteHeader({
                   className="absolute -top-3 right-4 grid h-5 min-w-5 place-items-center rounded-full px-1 text-[11px] text-black"
                   style={{ backgroundColor: accentColor }}
                 >
-                  ۳
+                  Û³
                 </span>
               </Link>
             </DraggableHeaderItem>
@@ -899,7 +901,7 @@ export function SiteHeader({
               layout={layout}
               onStartDrag={startDrag}
               className="inline-flex"
-              title="نگه‌دار و جابه‌جا کن"
+              title="Ù†Ú¯Ù‡â€ŒØ¯Ø§Ø± Ùˆ Ø¬Ø§Ø¨Ù‡â€ŒØ¬Ø§ Ú©Ù†"
             >
               <Link
                 href="/account"
@@ -910,7 +912,7 @@ export function SiteHeader({
               >
                 <UserRound size={25} strokeWidth={1.6} />
                 <span>
-                  <CmsEditMarker cmsKey="site.header.loginLabel" sectionKey="site.header" label="برچسب ورود و ثبت‌نام">
+                  <CmsEditMarker cmsKey="site.header.loginLabel" sectionKey="site.header" label="Ø¨Ø±Ú†Ø³Ø¨ ÙˆØ±ÙˆØ¯ Ùˆ Ø«Ø¨Øªâ€ŒÙ†Ø§Ù…">
                     {loginLabel}
                   </CmsEditMarker>
                 </span>
@@ -923,7 +925,7 @@ export function SiteHeader({
               layout={layout}
               onStartDrag={startDrag}
               className="relative hidden w-[330px] xl:block"
-              title="نگه‌دار و جابه‌جا کن"
+              title="Ù†Ú¯Ù‡â€ŒØ¯Ø§Ø± Ùˆ Ø¬Ø§Ø¨Ù‡â€ŒØ¬Ø§ Ú©Ù†"
             >
               <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50" size={22} strokeWidth={1.5} />
               <input
@@ -941,7 +943,7 @@ export function SiteHeader({
               layout={layout}
               onStartDrag={startDrag}
               className="inline-flex min-w-[190px] items-center justify-center text-center"
-              title="نگه‌دار و جابه‌جا کن؛ دوبار کلیک برای ویرایش"
+              title="Ù†Ú¯Ù‡â€ŒØ¯Ø§Ø± Ùˆ Ø¬Ø§Ø¨Ù‡â€ŒØ¬Ø§ Ú©Ù†Ø› Ø¯ÙˆØ¨Ø§Ø± Ú©Ù„ÛŒÚ© Ø¨Ø±Ø§ÛŒ ÙˆÛŒØ±Ø§ÛŒØ´"
             >
               {editorMode ? (
                 <button
@@ -961,7 +963,7 @@ export function SiteHeader({
                     <img src={logoImage} alt={logoTitle || "Feloral"} className="object-contain" style={logoImageStyle} />
                   ) : (
                     <span className="font-black tracking-[-0.05em] text-white" style={logoTextStyle}>
-                      <CmsEditMarker cmsKey={LOGO_CMS_KEY} sectionKey="site.logo" label="لوگو">
+                      <CmsEditMarker cmsKey={LOGO_CMS_KEY} sectionKey="site.logo" label="Ù„ÙˆÚ¯Ùˆ">
                         {logoTitle}
                       </CmsEditMarker>
                     </span>
@@ -973,7 +975,7 @@ export function SiteHeader({
                     <img src={logoImage} alt={logoTitle || "Feloral"} className="object-contain" style={logoImageStyle} />
                   ) : (
                     <span className="font-black tracking-[-0.05em] text-white" style={logoTextStyle}>
-                      <CmsEditMarker cmsKey={LOGO_CMS_KEY} sectionKey="site.logo" label="لوگو">
+                      <CmsEditMarker cmsKey={LOGO_CMS_KEY} sectionKey="site.logo" label="Ù„ÙˆÚ¯Ùˆ">
                         {logoTitle}
                       </CmsEditMarker>
                     </span>
@@ -987,9 +989,9 @@ export function SiteHeader({
                 type="button"
                 onPointerDown={startLogoResize}
                 className="absolute -right-8 top-1/2 z-[999999] grid h-7 w-7 -translate-y-1/2 cursor-ew-resize place-items-center rounded-full border border-[#d6a84f]/70 bg-black/90 text-[14px] font-black text-[#f7e6bd] shadow-xl"
-                title="برای تغییر سایز لوگو بکش"
+                title="Ø¨Ø±Ø§ÛŒ ØªØºÛŒÛŒØ± Ø³Ø§ÛŒØ² Ù„ÙˆÚ¯Ùˆ Ø¨Ú©Ø´"
               >
-                ↔
+                â†”
               </button>
             ) : null}
 
@@ -1001,22 +1003,22 @@ export function SiteHeader({
                     onClick={() => setLogoEditorOpen(false)}
                     className="rounded-full border border-white/15 px-3 py-1 text-[11px] font-bold text-white/70 hover:text-white"
                   >
-                    بستن
+                    Ø¨Ø³ØªÙ†
                   </button>
 
                   <div>
-                    <p className="text-sm font-black text-white">ویرایش لوگو</p>
-                    <p className="mt-1 text-[11px] text-white/50">متن، عکس، سایز و جای لوگو</p>
+                    <p className="text-sm font-black text-white">ÙˆÛŒØ±Ø§ÛŒØ´ Ù„ÙˆÚ¯Ùˆ</p>
+                    <p className="mt-1 text-[11px] text-white/50">Ù…ØªÙ†ØŒ Ø¹Ú©Ø³ØŒ Ø³Ø§ÛŒØ² Ùˆ Ø¬Ø§ÛŒ Ù„ÙˆÚ¯Ùˆ</p>
                   </div>
                 </div>
 
                 <label className="block text-[12px] font-bold text-white/70">
-                  متن لوگو
+                  Ù…ØªÙ† Ù„ÙˆÚ¯Ùˆ
                   <input
                     value={draftLogoText}
                     onChange={(event) => setDraftLogoText(event.target.value)}
                     className="mt-2 h-10 w-full rounded-xl border border-white/12 bg-white/[.04] px-3 text-right text-sm text-white outline-none"
-                    placeholder="مثلاً FELORAL"
+                    placeholder="Ù…Ø«Ù„Ø§Ù‹ FELORAL"
                     disabled={logoSaving}
                   />
                 </label>
@@ -1028,13 +1030,13 @@ export function SiteHeader({
                   className="mt-3 w-full rounded-xl px-4 py-2 text-sm font-black text-black disabled:opacity-60"
                   style={{ backgroundColor: accentColor }}
                 >
-                  ذخیره متن لوگو
+                  Ø°Ø®ÛŒØ±Ù‡ Ù…ØªÙ† Ù„ÙˆÚ¯Ùˆ
                 </button>
 
                 <div className="my-4 h-px bg-white/10" />
 
                 <label className="block cursor-pointer rounded-xl border border-dashed border-white/20 bg-white/[.035] px-4 py-4 text-center text-sm font-bold text-white/80 hover:bg-white/[.06]">
-                  آپلود مستقیم عکس لوگو
+                  Ø¢Ù¾Ù„ÙˆØ¯ Ù…Ø³ØªÙ‚ÛŒÙ… Ø¹Ú©Ø³ Ù„ÙˆÚ¯Ùˆ
                   <input
                     type="file"
                     accept="image/*"
@@ -1049,11 +1051,11 @@ export function SiteHeader({
                 </label>
 
                 <div className="mt-3 rounded-xl border border-white/10 bg-white/[.025] p-3">
-                  <p className="mb-2 text-[11px] font-bold text-white/55">یا با آپلودر اصلی CMS:</p>
+                  <p className="mb-2 text-[11px] font-bold text-white/55">ÛŒØ§ Ø¨Ø§ Ø¢Ù¾Ù„ÙˆØ¯Ø± Ø§ØµÙ„ÛŒ CMS:</p>
                   <CmsImageEditButton
                     cmsKey={LOGO_CMS_KEY}
                     sectionKey="site.logo"
-                    label="انتخاب/آپلود عکس لوگو"
+                    label="Ø§Ù†ØªØ®Ø§Ø¨/Ø¢Ù¾Ù„ÙˆØ¯ Ø¹Ú©Ø³ Ù„ÙˆÚ¯Ùˆ"
                     currentUrl={logoImage}
                     className="static"
                   />
@@ -1064,7 +1066,7 @@ export function SiteHeader({
                       disabled={logoSaving}
                       className="mt-3 w-full rounded-xl border border-white/15 px-4 py-2 text-sm font-black text-white/85 disabled:opacity-60"
                     >
-                      ذخیره همین عکس برای همیشه
+                      Ø°Ø®ÛŒØ±Ù‡ Ù‡Ù…ÛŒÙ† Ø¹Ú©Ø³ Ø¨Ø±Ø§ÛŒ Ù‡Ù…ÛŒØ´Ù‡
                     </button>
                   ) : null}
                 </div>
@@ -1072,7 +1074,7 @@ export function SiteHeader({
                 <div className="my-4 h-px bg-white/10" />
 
                 <label className="block text-[12px] font-bold text-white/70">
-                  سایز لوگو: {logoSize}px
+                  Ø³Ø§ÛŒØ² Ù„ÙˆÚ¯Ùˆ: {logoSize}px
                   <input
                     type="range"
                     min={MIN_LOGO_SIZE}
@@ -1090,7 +1092,7 @@ export function SiteHeader({
                     onClick={() => void persistLogoSize(logoSize - 10)}
                     className="flex-1 rounded-xl border border-white/15 px-3 py-2 text-sm font-black text-white/80"
                   >
-                    کوچک‌تر
+                    Ú©ÙˆÚ†Ú©â€ŒØªØ±
                   </button>
 
                   <button
@@ -1098,7 +1100,7 @@ export function SiteHeader({
                     onClick={() => void persistLogoSize(logoSize + 10)}
                     className="flex-1 rounded-xl border border-white/15 px-3 py-2 text-sm font-black text-white/80"
                   >
-                    بزرگ‌تر
+                    Ø¨Ø²Ø±Ú¯â€ŒØªØ±
                   </button>
 
                   <button
@@ -1106,7 +1108,7 @@ export function SiteHeader({
                     onClick={() => void resetLogoSize()}
                     className="flex-1 rounded-xl border border-white/15 px-3 py-2 text-sm font-black text-white/80"
                   >
-                    ریست سایز
+                    Ø±ÛŒØ³Øª Ø³Ø§ÛŒØ²
                   </button>
                 </div>
 
@@ -1116,7 +1118,7 @@ export function SiteHeader({
                     onClick={() => void resetOne("main.logo")}
                     className="flex-1 rounded-xl border border-white/15 px-3 py-2 text-sm font-black text-white/80"
                   >
-                    ریست جای لوگو
+                    Ø±ÛŒØ³Øª Ø¬Ø§ÛŒ Ù„ÙˆÚ¯Ùˆ
                   </button>
 
                   <button
@@ -1124,7 +1126,7 @@ export function SiteHeader({
                     onClick={clearLocalLogo}
                     className="flex-1 rounded-xl border border-white/15 px-3 py-2 text-sm font-black text-white/70"
                   >
-                    پاک کردن کش لوگو
+                    Ù¾Ø§Ú© Ú©Ø±Ø¯Ù† Ú©Ø´ Ù„ÙˆÚ¯Ùˆ
                   </button>
                 </div>
 
@@ -1150,7 +1152,7 @@ export function SiteHeader({
                   layout={layout}
                   onStartDrag={startDrag}
                   className="inline-flex"
-                  title="نگه‌دار و جابه‌جا کن"
+                  title="Ù†Ú¯Ù‡â€ŒØ¯Ø§Ø± Ùˆ Ø¬Ø§Ø¨Ù‡â€ŒØ¬Ø§ Ú©Ù†"
                 >
                   <Link
                     href={item.href}
@@ -1159,7 +1161,7 @@ export function SiteHeader({
                     }}
                     className="group relative py-3 text-white/88 transition hover:opacity-80"
                   >
-                    <CmsEditMarker cmsKey={cmsKey} sectionKey="site.header" label={`منو ${item.label}`}>
+                    <CmsEditMarker cmsKey={cmsKey} sectionKey="site.header" label={`Ù…Ù†Ùˆ ${item.label}`}>
                       {label}
                     </CmsEditMarker>
                     <span
@@ -1178,3 +1180,4 @@ export function SiteHeader({
     </header>
   );
 }
+
