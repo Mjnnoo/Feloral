@@ -1,110 +1,125 @@
 import {
-  Injectable,
-  UnauthorizedException,
   ConflictException,
+  Injectable,
   InternalServerErrorException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { PrismaService } from '../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+
+import { PrismaService } from '../prisma/prisma.service';
+import { RegisterDto } from './dto/register.dto';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private prisma: PrismaService,
-    private jwtService: JwtService,
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
   ) {}
 
-  // =========================
-  // REGISTER
-  // =========================
-  async register(data: {
-    fullName: string;
-    mobile: string;
-    password: string;
-    email?: string;
-  }) {
+  async register(dto: RegisterDto) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: {
+        mobile: dto.mobile,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (existingUser) {
+      throw new ConflictException(
+        'کاربری با این شماره موبایل قبلاً ثبت‌نام کرده است',
+      );
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+
     try {
-      if (!data.fullName || !data.mobile || !data.password) {
-        throw new Error('Missing required fields');
-      }
-
-      const exists = await this.prisma.user.findUnique({
-        where: { mobile: data.mobile },
-      });
-
-      if (exists) {
-        throw new ConflictException('Mobile already exists');
-      }
-
-      const hashedPassword = await bcrypt.hash(data.password, 10);
-
       const user = await this.prisma.user.create({
         data: {
-          fullName: data.fullName,
-          mobile: data.mobile,
-          email: data.email || null,
+          fullName: dto.fullName,
+          mobile: dto.mobile,
+          email: dto.email ?? null,
           password: hashedPassword,
+        },
+        select: {
+          id: true,
+          fullName: true,
+          mobile: true,
+          email: true,
+          role: true,
+          isActive: true,
+          createdAt: true,
         },
       });
 
       return {
-        message: 'User created successfully',
-        user: {
-          id: user.id,
-          fullName: user.fullName,
-          mobile: user.mobile,
-          email: user.email,
-          role: user.role,
-        },
+        message: 'ثبت‌نام با موفقیت انجام شد',
+        user,
       };
-    } catch (err) {
-      console.error('REGISTER ERROR:', err);
-      throw new InternalServerErrorException(err.message || 'Register failed');
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException(
+          'کاربری با این اطلاعات قبلاً ثبت‌نام کرده است',
+        );
+      }
+
+      throw new InternalServerErrorException(
+        'ثبت‌نام با خطا مواجه شد',
+      );
     }
   }
 
-  // =========================
-  // LOGIN
-  // =========================
   async login(mobile: string, password: string) {
-    try {
-      if (!mobile || !password) {
-        throw new UnauthorizedException('Mobile and password required');
-      }
+    const user = await this.prisma.user.findUnique({
+      where: {
+        mobile,
+      },
+    });
 
-      const user = await this.prisma.user.findUnique({
-        where: { mobile },
-      });
-
-      if (!user) {
-        throw new UnauthorizedException('Invalid credentials');
-      }
-
-      const ok = await bcrypt.compare(password, user.password ?? '');
-
-      if (!ok) {
-        throw new UnauthorizedException('Invalid credentials');
-      }
-
-      const token = await this.jwtService.signAsync({
-        sub: user.id,
-        mobile: user.mobile,
-        role: user.role,
-      });
-
-      return {
-        access_token: token,
-        user: {
-          id: user.id,
-          fullName: user.fullName,
-          mobile: user.mobile,
-          role: user.role,
-        },
-      };
-    } catch (err) {
-      console.error('LOGIN ERROR:', err);
-      throw err;
+    if (!user) {
+      throw new UnauthorizedException(
+        'شماره موبایل یا رمز عبور اشتباه است',
+      );
     }
+
+    if (!user.isActive) {
+      throw new UnauthorizedException(
+        'حساب کاربری غیرفعال است',
+      );
+    }
+
+    const passwordMatches = await bcrypt.compare(
+      password,
+      user.password,
+    );
+
+    if (!passwordMatches) {
+      throw new UnauthorizedException(
+        'شماره موبایل یا رمز عبور اشتباه است',
+      );
+    }
+
+    const accessToken = await this.jwtService.signAsync({
+      sub: user.id,
+      mobile: user.mobile,
+      role: user.role,
+    });
+
+    return {
+      access_token: accessToken,
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        mobile: user.mobile,
+        email: user.email,
+        role: user.role,
+      },
+    };
   }
 }
