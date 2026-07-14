@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 enum OrderStatus {
@@ -98,8 +99,30 @@ model User {
   beautyProfile BeautyProfile?
   tryOnSessions VirtualTryOnSession[]
 
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  Session   Session[]
+}
+
+model Session {
+  id               String @id @default(uuid())
+  userId           Int
+  refreshTokenHash String
+
+  userAgent String?
+  ipAddress String?
+
+  expiresAt  DateTime
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Brand {
