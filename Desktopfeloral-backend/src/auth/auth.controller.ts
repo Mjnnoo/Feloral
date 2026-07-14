@@ -29,7 +29,8 @@ export class AuthController {
   async login(
     @Body() dto: LoginDto,
     @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
+    @Res({ passthrough: true })
+    response: Response,
   ) {
     const result = await this.authService.login(
       dto.mobile,
@@ -40,21 +41,63 @@ export class AuthController {
       },
     );
 
-    response.cookie(
-      'refresh_token',
+    this.setRefreshTokenCookie(
+      response,
       result.refreshToken,
-      {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/auth',
-        maxAge: result.refreshTokenMaxAgeMs,
-      },
+      result.refreshTokenMaxAgeMs,
     );
 
     return {
       access_token: result.access_token,
       user: result.user,
     };
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('refresh')
+  async refresh(
+    @Req() request: Request,
+    @Res({ passthrough: true })
+    response: Response,
+  ) {
+    const refreshToken =
+      request.cookies?.refresh_token;
+
+    const result =
+      await this.authService.refresh(
+        typeof refreshToken === 'string'
+          ? refreshToken
+          : '',
+      );
+
+    this.setRefreshTokenCookie(
+      response,
+      result.refreshToken,
+      result.refreshTokenMaxAgeMs,
+    );
+
+    return {
+      access_token: result.access_token,
+      user: result.user,
+    };
+  }
+
+  private setRefreshTokenCookie(
+    response: Response,
+    refreshToken: string,
+    maxAge: number,
+  ) {
+    response.cookie(
+      'refresh_token',
+      refreshToken,
+      {
+        httpOnly: true,
+        secure:
+          process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/auth',
+        maxAge,
+      },
+    );
   }
 }

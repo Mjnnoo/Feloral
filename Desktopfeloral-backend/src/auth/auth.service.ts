@@ -18,6 +18,12 @@ interface LoginMetadata {
   ipAddress?: string;
 }
 
+interface RefreshTokenPayload {
+  sub: number;
+  sessionId: string;
+  tokenType: 'refresh';
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -126,38 +132,49 @@ export class AuthService {
       );
 
     const refreshTokenMaxAgeMs =
-      this.parseDurationToMilliseconds(refreshTokenLifetime);
+      this.parseDurationToMilliseconds(
+        refreshTokenLifetime,
+      );
 
-    const refreshToken = await this.jwtService.signAsync(
-      {
-        sub: user.id,
-        sessionId,
-        tokenType: 'refresh',
-      },
-      {
-        secret:
-          this.configService.getOrThrow<string>(
-            'JWT_REFRESH_SECRET',
+    const refreshToken =
+      await this.jwtService.signAsync(
+        {
+          sub: user.id,
+          sessionId,
+          tokenType: 'refresh',
+        },
+        {
+          secret:
+            this.configService.getOrThrow<string>(
+              'JWT_REFRESH_SECRET',
+            ),
+          expiresIn: Math.floor(
+            refreshTokenMaxAgeMs / 1000,
           ),
-        expiresIn: Math.floor(refreshTokenMaxAgeMs / 1000),
-      },
-    );
+        },
+      );
 
-    const accessToken = await this.jwtService.signAsync({
-      sub: user.id,
-      mobile: user.mobile,
-      role: user.role,
-      sessionId,
-      tokenType: 'access',
-    });
+    const accessToken =
+      await this.jwtService.signAsync({
+        sub: user.id,
+        mobile: user.mobile,
+        role: user.role,
+        sessionId,
+        tokenType: 'access',
+      });
 
     await this.prisma.session.create({
       data: {
         id: sessionId,
         userId: user.id,
-        refreshTokenHash: this.hashToken(refreshToken),
-        userAgent: metadata.userAgent?.slice(0, 500) ?? null,
-        ipAddress: metadata.ipAddress?.slice(0, 100) ?? null,
+        refreshTokenHash:
+          this.hashToken(refreshToken),
+        userAgent:
+          metadata.userAgent?.slice(0, 500) ??
+          null,
+        ipAddress:
+          metadata.ipAddress?.slice(0, 100) ??
+          null,
         expiresAt: new Date(
           Date.now() + refreshTokenMaxAgeMs,
         ),
@@ -174,6 +191,162 @@ export class AuthService {
         mobile: user.mobile,
         email: user.email,
         role: user.role,
+      },
+    };
+  }
+
+  async refresh(refreshToken: string) {
+    if (!refreshToken) {
+      throw new UnauthorizedException(
+        'نشست کاربری یافت نشد',
+      );
+    }
+
+    let payload: RefreshTokenPayload;
+
+    try {
+      payload =
+        await this.jwtService.verifyAsync<RefreshTokenPayload>(
+          refreshToken,
+          {
+            secret:
+              this.configService.getOrThrow<string>(
+                'JWT_REFRESH_SECRET',
+              ),
+          },
+        );
+    } catch {
+      throw new UnauthorizedException(
+        'نشست منقضی یا نامعتبر است',
+      );
+    }
+
+    if (
+      payload.tokenType !== 'refresh' ||
+      !payload.sub ||
+      !payload.sessionId
+    ) {
+      throw new UnauthorizedException(
+        'Refresh Token معتبر نیست',
+      );
+    }
+
+    const session =
+      await this.prisma.session.findUnique({
+        where: {
+          id: payload.sessionId,
+        },
+        include: {
+          user: true,
+        },
+      });
+
+    if (
+      !session ||
+      session.userId !== payload.sub ||
+      session.revokedAt ||
+      session.expiresAt <= new Date() ||
+      !session.user.isActive
+    ) {
+      throw new UnauthorizedException(
+        'نشست منقضی یا غیرفعال است',
+      );
+    }
+
+    const currentTokenHash =
+      this.hashToken(refreshToken);
+
+    if (
+      session.refreshTokenHash !==
+      currentTokenHash
+    ) {
+      await this.prisma.session.updateMany({
+        where: {
+          id: session.id,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: new Date(),
+        },
+      });
+
+      throw new UnauthorizedException(
+        'استفاده غیرمجاز از Refresh Token شناسایی شد',
+      );
+    }
+
+    const refreshTokenLifetime =
+      this.configService.get<string>(
+        'JWT_REFRESH_EXPIRES_IN',
+        '30d',
+      );
+
+    const refreshTokenMaxAgeMs =
+      this.parseDurationToMilliseconds(
+        refreshTokenLifetime,
+      );
+
+    const newRefreshToken =
+      await this.jwtService.signAsync(
+        {
+          sub: session.user.id,
+          sessionId: session.id,
+          tokenType: 'refresh',
+        },
+        {
+          secret:
+            this.configService.getOrThrow<string>(
+              'JWT_REFRESH_SECRET',
+            ),
+          expiresIn: Math.floor(
+            refreshTokenMaxAgeMs / 1000,
+          ),
+        },
+      );
+
+    const newAccessToken =
+      await this.jwtService.signAsync({
+        sub: session.user.id,
+        mobile: session.user.mobile,
+        role: session.user.role,
+        sessionId: session.id,
+        tokenType: 'access',
+      });
+
+    const updateResult =
+      await this.prisma.session.updateMany({
+        where: {
+          id: session.id,
+          refreshTokenHash:
+            currentTokenHash,
+          revokedAt: null,
+        },
+        data: {
+          refreshTokenHash:
+            this.hashToken(newRefreshToken),
+          lastUsedAt: new Date(),
+          expiresAt: new Date(
+            Date.now() + refreshTokenMaxAgeMs,
+          ),
+        },
+      });
+
+    if (updateResult.count !== 1) {
+      throw new UnauthorizedException(
+        'این Refresh Token قبلاً استفاده شده است',
+      );
+    }
+
+    return {
+      access_token: newAccessToken,
+      refreshToken: newRefreshToken,
+      refreshTokenMaxAgeMs,
+      user: {
+        id: session.user.id,
+        fullName: session.user.fullName,
+        mobile: session.user.mobile,
+        email: session.user.email,
+        role: session.user.role,
       },
     };
   }
