@@ -125,56 +125,31 @@ export class AuthService {
 
     const sessionId = randomUUID();
 
-    const refreshTokenLifetime =
-      this.configService.get<string>(
-        'JWT_REFRESH_EXPIRES_IN',
-        '30d',
-      );
-
     const refreshTokenMaxAgeMs =
-      this.parseDurationToMilliseconds(
-        refreshTokenLifetime,
-      );
+      this.getRefreshTokenMaxAgeMs();
 
-    const refreshToken =
-      await this.jwtService.signAsync(
-        {
-          sub: user.id,
-          sessionId,
-          tokenType: 'refresh',
-        },
-        {
-          secret:
-            this.configService.getOrThrow<string>(
-              'JWT_REFRESH_SECRET',
-            ),
-          expiresIn: Math.floor(
-            refreshTokenMaxAgeMs / 1000,
-          ),
-        },
-      );
+    const refreshToken = await this.createRefreshToken(
+      user.id,
+      sessionId,
+      refreshTokenMaxAgeMs,
+    );
 
-    const accessToken =
-      await this.jwtService.signAsync({
-        sub: user.id,
-        mobile: user.mobile,
-        role: user.role,
-        sessionId,
-        tokenType: 'access',
-      });
+    const accessToken = await this.createAccessToken({
+      id: user.id,
+      mobile: user.mobile,
+      role: user.role,
+      sessionId,
+    });
 
     await this.prisma.session.create({
       data: {
         id: sessionId,
         userId: user.id,
-        refreshTokenHash:
-          this.hashToken(refreshToken),
+        refreshTokenHash: this.hashToken(refreshToken),
         userAgent:
-          metadata.userAgent?.slice(0, 500) ??
-          null,
+          metadata.userAgent?.slice(0, 500) ?? null,
         ipAddress:
-          metadata.ipAddress?.slice(0, 100) ??
-          null,
+          metadata.ipAddress?.slice(0, 100) ?? null,
         expiresAt: new Date(
           Date.now() + refreshTokenMaxAgeMs,
         ),
@@ -231,15 +206,14 @@ export class AuthService {
       );
     }
 
-    const session =
-      await this.prisma.session.findUnique({
-        where: {
-          id: payload.sessionId,
-        },
-        include: {
-          user: true,
-        },
-      });
+    const session = await this.prisma.session.findUnique({
+      where: {
+        id: payload.sessionId,
+      },
+      include: {
+        user: true,
+      },
+    });
 
     if (
       !session ||
@@ -257,8 +231,7 @@ export class AuthService {
       this.hashToken(refreshToken);
 
     if (
-      session.refreshTokenHash !==
-      currentTokenHash
+      session.refreshTokenHash !== currentTokenHash
     ) {
       await this.prisma.session.updateMany({
         where: {
@@ -275,50 +248,29 @@ export class AuthService {
       );
     }
 
-    const refreshTokenLifetime =
-      this.configService.get<string>(
-        'JWT_REFRESH_EXPIRES_IN',
-        '30d',
-      );
-
     const refreshTokenMaxAgeMs =
-      this.parseDurationToMilliseconds(
-        refreshTokenLifetime,
-      );
+      this.getRefreshTokenMaxAgeMs();
 
     const newRefreshToken =
-      await this.jwtService.signAsync(
-        {
-          sub: session.user.id,
-          sessionId: session.id,
-          tokenType: 'refresh',
-        },
-        {
-          secret:
-            this.configService.getOrThrow<string>(
-              'JWT_REFRESH_SECRET',
-            ),
-          expiresIn: Math.floor(
-            refreshTokenMaxAgeMs / 1000,
-          ),
-        },
+      await this.createRefreshToken(
+        session.user.id,
+        session.id,
+        refreshTokenMaxAgeMs,
       );
 
     const newAccessToken =
-      await this.jwtService.signAsync({
-        sub: session.user.id,
+      await this.createAccessToken({
+        id: session.user.id,
         mobile: session.user.mobile,
         role: session.user.role,
         sessionId: session.id,
-        tokenType: 'access',
       });
 
     const updateResult =
       await this.prisma.session.updateMany({
         where: {
           id: session.id,
-          refreshTokenHash:
-            currentTokenHash,
+          refreshTokenHash: currentTokenHash,
           revokedAt: null,
         },
         data: {
@@ -349,6 +301,110 @@ export class AuthService {
         role: session.user.role,
       },
     };
+  }
+
+  async logout(refreshToken: string) {
+    if (refreshToken) {
+      try {
+        const payload =
+          await this.jwtService.verifyAsync<RefreshTokenPayload>(
+            refreshToken,
+            {
+              secret:
+                this.configService.getOrThrow<string>(
+                  'JWT_REFRESH_SECRET',
+                ),
+            },
+          );
+
+        if (
+          payload.tokenType === 'refresh' &&
+          payload.sessionId &&
+          payload.sub
+        ) {
+          await this.prisma.session.updateMany({
+            where: {
+              id: payload.sessionId,
+              userId: payload.sub,
+              revokedAt: null,
+            },
+            data: {
+              revokedAt: new Date(),
+            },
+          });
+        }
+      } catch {
+        // خروج باید حتی با Cookie منقضی یا نامعتبر هم موفق باشد.
+      }
+    }
+
+    return {
+      message: 'با موفقیت از حساب کاربری خارج شدید',
+    };
+  }
+
+  async logoutAll(userId: number) {
+    await this.prisma.session.updateMany({
+      where: {
+        userId,
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: new Date(),
+      },
+    });
+
+    return {
+      message: 'از تمام دستگاه‌ها خارج شدید',
+    };
+  }
+
+  private async createRefreshToken(
+    userId: number,
+    sessionId: string,
+    maxAgeMs: number,
+  ) {
+    return this.jwtService.signAsync(
+      {
+        sub: userId,
+        sessionId,
+        tokenType: 'refresh',
+        jti: randomUUID(),
+      },
+      {
+        secret:
+          this.configService.getOrThrow<string>(
+            'JWT_REFRESH_SECRET',
+          ),
+        expiresIn: Math.floor(maxAgeMs / 1000),
+      },
+    );
+  }
+
+  private async createAccessToken(user: {
+    id: number;
+    mobile: string;
+    role: string;
+    sessionId: string;
+  }) {
+    return this.jwtService.signAsync({
+      sub: user.id,
+      mobile: user.mobile,
+      role: user.role,
+      sessionId: user.sessionId,
+      tokenType: 'access',
+      jti: randomUUID(),
+    });
+  }
+
+  private getRefreshTokenMaxAgeMs(): number {
+    const lifetime =
+      this.configService.get<string>(
+        'JWT_REFRESH_EXPIRES_IN',
+        '30d',
+      );
+
+    return this.parseDurationToMilliseconds(lifetime);
   }
 
   private hashToken(token: string): string {
