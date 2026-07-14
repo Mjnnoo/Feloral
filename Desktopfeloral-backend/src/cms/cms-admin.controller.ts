@@ -13,9 +13,9 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { RolesGuard } from '../auth/roles/roles.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 import { CmsService } from './cms.service';
 import { UpdateContentDto } from './dto/update-content.dto';
