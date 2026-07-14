@@ -4,18 +4,26 @@ import {
   InternalServerErrorException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { createHash, randomUUID } from 'crypto';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
+
+interface LoginMetadata {
+  userAgent?: string;
+  ipAddress?: string;
+}
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -75,7 +83,11 @@ export class AuthService {
     }
   }
 
-  async login(mobile: string, password: string) {
+  async login(
+    mobile: string,
+    password: string,
+    metadata: LoginMetadata,
+  ) {
     const user = await this.prisma.user.findUnique({
       where: {
         mobile,
@@ -105,14 +117,57 @@ export class AuthService {
       );
     }
 
+    const sessionId = randomUUID();
+
+    const refreshTokenLifetime =
+      this.configService.get<string>(
+        'JWT_REFRESH_EXPIRES_IN',
+        '30d',
+      );
+
+    const refreshTokenMaxAgeMs =
+      this.parseDurationToMilliseconds(refreshTokenLifetime);
+
+    const refreshToken = await this.jwtService.signAsync(
+      {
+        sub: user.id,
+        sessionId,
+        tokenType: 'refresh',
+      },
+      {
+        secret:
+          this.configService.getOrThrow<string>(
+            'JWT_REFRESH_SECRET',
+          ),
+        expiresIn: Math.floor(refreshTokenMaxAgeMs / 1000),
+      },
+    );
+
     const accessToken = await this.jwtService.signAsync({
       sub: user.id,
       mobile: user.mobile,
       role: user.role,
+      sessionId,
+      tokenType: 'access',
+    });
+
+    await this.prisma.session.create({
+      data: {
+        id: sessionId,
+        userId: user.id,
+        refreshTokenHash: this.hashToken(refreshToken),
+        userAgent: metadata.userAgent?.slice(0, 500) ?? null,
+        ipAddress: metadata.ipAddress?.slice(0, 100) ?? null,
+        expiresAt: new Date(
+          Date.now() + refreshTokenMaxAgeMs,
+        ),
+      },
     });
 
     return {
       access_token: accessToken,
+      refreshToken,
+      refreshTokenMaxAgeMs,
       user: {
         id: user.id,
         fullName: user.fullName,
@@ -121,5 +176,37 @@ export class AuthService {
         role: user.role,
       },
     };
+  }
+
+  private hashToken(token: string): string {
+    return createHash('sha256')
+      .update(token)
+      .digest('hex');
+  }
+
+  private parseDurationToMilliseconds(
+    duration: string,
+  ): number {
+    const match = /^(\d+)(s|m|h|d)$/.exec(
+      duration.trim(),
+    );
+
+    if (!match) {
+      throw new InternalServerErrorException(
+        'مقدار JWT_REFRESH_EXPIRES_IN معتبر نیست',
+      );
+    }
+
+    const amount = Number(match[1]);
+    const unit = match[2];
+
+    const multipliers: Record<string, number> = {
+      s: 1000,
+      m: 60 * 1000,
+      h: 60 * 60 * 1000,
+      d: 24 * 60 * 60 * 1000,
+    };
+
+    return amount * multipliers[unit];
   }
 }
