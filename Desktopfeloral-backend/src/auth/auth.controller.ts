@@ -65,6 +65,36 @@ export class AuthController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('admin/login')
+  async adminLogin(
+    @Body() dto: LoginDto,
+    @Req() request: Request,
+    @Res({ passthrough: true })
+    response: Response,
+  ) {
+    const result =
+      await this.authService.adminLogin(
+        dto.mobile,
+        dto.password,
+        {
+          userAgent: request.get('user-agent'),
+          ipAddress: request.ip,
+        },
+      );
+
+    this.setRefreshTokenCookie(
+      response,
+      result.refreshToken,
+      result.refreshTokenMaxAgeMs,
+    );
+
+    return {
+      access_token: result.access_token,
+      user: result.user,
+    };
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('refresh')
   async refresh(
     @Req() request: Request,

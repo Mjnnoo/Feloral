@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   UnauthorizedException,
@@ -23,7 +24,13 @@ interface RefreshTokenPayload {
   sessionId: string;
   tokenType: 'refresh';
 }
-
+const ADMIN_ROLES = [
+  'super_admin',
+  'admin',
+  'editor',
+  'seo',
+  'ai',
+] as const;
 @Injectable()
 export class AuthService {
   constructor(
@@ -93,6 +100,7 @@ export class AuthService {
     mobile: string,
     password: string,
     metadata: LoginMetadata,
+    allowedRoles?: readonly string[],
   ) {
     const user = await this.prisma.user.findUnique({
       where: {
@@ -123,6 +131,19 @@ export class AuthService {
       );
     }
 
+    const normalizedRole = user.role
+  .trim()
+  .toLowerCase();
+
+if (
+  allowedRoles &&
+  !allowedRoles.includes(normalizedRole)
+) {
+  throw new ForbiddenException(
+    'اجازه ورود به پنل مدیریت را ندارید',
+  );
+}
+
     const sessionId = randomUUID();
 
     const refreshTokenMaxAgeMs =
@@ -137,7 +158,7 @@ export class AuthService {
     const accessToken = await this.createAccessToken({
       id: user.id,
       mobile: user.mobile,
-      role: user.role,
+      role: normalizedRole,
       sessionId,
     });
 
@@ -165,11 +186,22 @@ export class AuthService {
         fullName: user.fullName,
         mobile: user.mobile,
         email: user.email,
-        role: user.role,
+        role: normalizedRole,
       },
     };
   }
-
+async adminLogin(
+  mobile: string,
+  password: string,
+  metadata: LoginMetadata,
+) {
+  return this.login(
+    mobile,
+    password,
+    metadata,
+    ADMIN_ROLES,
+  );
+}
   async refresh(refreshToken: string) {
     if (!refreshToken) {
       throw new UnauthorizedException(
