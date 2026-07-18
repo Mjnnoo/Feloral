@@ -39,6 +39,14 @@ enum ShippingStatus {
   canceled
 }
 
+
+enum PaymentAttemptStatus {
+  requested
+  verified
+  failed
+  review_required
+}
+
 enum CouponType {
   percent
   fixed
@@ -337,6 +345,16 @@ model Order {
 
   authority String?
 
+  checkoutKey          String?  @unique
+  reservationExpiresAt DateTime?
+  stockReleasedAt      DateTime?
+  paidAt               DateTime?
+  canceledAt           DateTime?
+  paymentRefId         String?
+  paymentCardPan       String?
+
+  paymentAttempts PaymentAttempt[]
+
   shippingReceiverName   String?
   shippingReceiverMobile String?
   shippingProvince       String?
@@ -379,6 +397,30 @@ model Order {
 
   @@index([couponId])
   @@index([couponCode])
+  @@index([userId, createdAt])
+  @@index([status, reservationExpiresAt])
+}
+
+model PaymentAttempt {
+  id        Int                  @id @default(autoincrement())
+  orderId   Int
+  authority String               @unique
+  amount    Decimal              @db.Decimal(18, 2)
+  status    PaymentAttemptStatus @default(requested)
+
+  gatewayCode Int?
+  refId       String?
+  cardPan     String?
+  rawResponse Json?
+  verifiedAt  DateTime?
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId, createdAt])
+  @@index([status, createdAt])
 }
 
 model OrderItem {

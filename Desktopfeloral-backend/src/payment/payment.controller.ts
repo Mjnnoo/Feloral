@@ -1,18 +1,45 @@
-import { Controller, Post, Query, Body } from '@nestjs/common';
-import { PaymentService } from './payment.service';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+
 import { User } from '../auth/decorators/user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import type { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { RequestPaymentDto } from './dto/request-payment.dto';
+import { VerifyPaymentDto } from './dto/verify-payment.dto';
+import { PaymentService } from './payment.service';
 
 @Controller('payment')
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
+  @UseGuards(JwtAuthGuard)
   @Post('request')
-  request(@Body() body: { orderId: number }, @User() user: any) {
-    return this.paymentService.createPayment(body.orderId, user.id);
+  request(@Body() dto: RequestPaymentDto, @User() user: AuthenticatedUser) {
+    return this.paymentService.createPayment(dto.orderId, user.id);
+  }
+
+  @Get('verify')
+  verifyRedirect(
+    @Query('Authority') authority: string,
+    @Query('orderId') orderId: string,
+    @Query('Status') status?: string,
+  ) {
+    return this.paymentService.verifyPayment(
+      authority,
+      Number(orderId),
+      status,
+    );
   }
 
   @Post('verify')
-  verify(@Query('Authority') authority: string, @Body('orderId') orderId: number) {
-    return this.paymentService.verifyPayment(authority, orderId);
+  verifyPost(
+    @Body() dto: VerifyPaymentDto,
+    @Query('Authority') queryAuthority?: string,
+    @Query('Status') queryStatus?: string,
+  ) {
+    return this.paymentService.verifyPayment(
+      queryAuthority || dto.authority || '',
+      dto.orderId,
+      queryStatus || dto.status,
+    );
   }
 }
