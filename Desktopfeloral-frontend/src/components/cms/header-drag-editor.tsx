@@ -67,14 +67,14 @@ function getItems() {
   const navLinks = nav ? (Array.from(nav.querySelectorAll("a")) as HTMLElement[]) : [];
 
   return [
-    { id: "nav-home", label: "Ø®Ø§Ù†Ù‡", el: navLinks[0] || null },
-    { id: "nav-brand", label: "Ø¨Ø±Ù†Ø¯Ù‡Ø§", el: navLinks[1] || null },
-    { id: "nav-category", label: "Ø¯Ø³ØªÙ‡â€ŒØ¨Ù†Ø¯ÛŒ", el: navLinks[2] || null },
-    { id: "nav-offer", label: "Ù¾ÛŒØ´Ù†Ù‡Ø§Ø¯ ÙˆÛŒÚ˜Ù‡", el: navLinks[3] || null },
-    { id: "cart", label: "Ø³Ø¨Ø¯ Ø®Ø±ÛŒØ¯", el: document.querySelector('header a[href="/cart"]') as HTMLElement | null },
-    { id: "login", label: "ÙˆØ±ÙˆØ¯", el: (document.querySelector('header a[href="/account"]') || document.querySelector('header a[href="/login"]')) as HTMLElement | null },
-    { id: "search", label: "Ø¬Ø³ØªØ¬Ùˆ", el: searchBox() },
-    { id: "logo", label: "Ù„ÙˆÚ¯Ùˆ", el: document.querySelector('[data-feloral-header-logo="center"]') as HTMLElement | null },
+    { id: "nav-home", label: "خانه", el: navLinks[0] || null },
+    { id: "nav-brand", label: "برندها", el: navLinks[1] || null },
+    { id: "nav-category", label: "دسته‌بندی", el: navLinks[2] || null },
+    { id: "nav-offer", label: "پیشنهاد ویژه", el: navLinks[3] || null },
+    { id: "cart", label: "سبد خرید", el: document.querySelector('header a[href="/cart"]') as HTMLElement | null },
+    { id: "login", label: "ورود", el: (document.querySelector('header a[href="/account"]') || document.querySelector('header a[href="/login"]')) as HTMLElement | null },
+    { id: "search", label: "جستجو", el: searchBox() },
+    { id: "logo", label: "لوگو", el: document.querySelector('[data-feloral-header-logo="center"]') as HTMLElement | null },
   ].filter((x) => Boolean(x.el)) as Array<{ id: string; label: string; el: HTMLElement }>;
 }
 
@@ -89,7 +89,7 @@ function makeHandle(item: { id: string; label: string; el: HTMLElement }) {
   handle.type = "button";
   handle.dataset.feloralDragHandle = "true";
   handle.dataset.feloralDragId = item.id;
-  handle.textContent = `Ø¬Ø§Ø¨Ø¬Ø§ÛŒÛŒ ${item.label}`;
+  handle.textContent = `جابجایی ${item.label}`;
 
   handle.style.position = "fixed";
   handle.style.zIndex = item.id === "logo" ? "100001" : "99999";
@@ -210,8 +210,8 @@ function makeSearchResizeHandle(item: { id: string; label: string; el: HTMLEleme
   handle.type = "button";
   handle.dataset.feloralResizeHandle = "true";
   handle.dataset.feloralResizeId = item.id;
-  handle.textContent = "â†”";
-  handle.title = "Ø¨Ø±Ø§ÛŒ Ú©ÙˆÚ†Ú© Ùˆ Ø¨Ø²Ø±Ú¯ Ú©Ø±Ø¯Ù† Ø¹Ø±Ø¶ Ø¨Ø§Ú©Ø³ Ø¬Ø³ØªØ¬Ùˆ Ø¨Ú©Ø´";
+  handle.textContent = "↔";
+  handle.title = "برای کوچک و بزرگ کردن عرض باکس جستجو بکش";
 
   handle.style.position = "fixed";
   handle.style.zIndex = "100002";
@@ -312,7 +312,7 @@ function makeResetButton() {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.dataset.feloralDragReset = "true";
-  btn.textContent = "Ø¨Ø§Ø²Ù†Ø´Ø§Ù†ÛŒ Ø¬Ø§ÛŒÚ¯Ø§Ù‡ Ù‡Ø¯Ø±";
+  btn.textContent = "بازنشانی جایگاه هدر";
   btn.style.position = "fixed";
   btn.style.left = "18px";
   btn.style.bottom = "18px";
@@ -371,4 +371,3 @@ export function HeaderDragEditor() {
 
   return null;
 }
-

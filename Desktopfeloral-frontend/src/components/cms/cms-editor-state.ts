@@ -1,6 +1,16 @@
 export const EDITOR_MODE_KEY = "feloral_editor_mode";
 export const ADMIN_TOKEN_KEY = "feloral_admin_token";
 
+const LEGACY_ADMIN_TOKEN_KEYS = [
+  ADMIN_TOKEN_KEY,
+  "feloral.admin.token",
+  "feloral.admin.accessToken",
+  "feloralAdminToken",
+  "adminToken",
+  "accessToken",
+  "token",
+];
+
 export function isBrowser() {
   return typeof window !== "undefined";
 }
@@ -9,8 +19,12 @@ export function readEditorModeFromBrowser() {
   if (!isBrowser()) return false;
 
   const url = new URL(window.location.href);
+  const requested =
+    url.searchParams.get("editor") === "1" ||
+    url.searchParams.get("admin") === "1" ||
+    window.location.pathname.startsWith("/admin");
 
-  if (url.searchParams.get("editor") === "1") {
+  if (requested) {
     window.localStorage.setItem(EDITOR_MODE_KEY, "1");
     return true;
   }
@@ -29,28 +43,43 @@ export function setEditorModeInBrowser(enabled: boolean) {
     document.body.classList.remove("cms-debug");
   }
 
-  window.dispatchEvent(new CustomEvent("feloral-editor-state", { detail: { enabled } }));
+  window.dispatchEvent(
+    new CustomEvent("feloral-editor-state", {
+      detail: { enabled },
+    }),
+  );
 }
 
-export function readAdminToken() {
-  if (!isBrowser()) return "";
-  return window.localStorage.getItem(ADMIN_TOKEN_KEY) || "";
-}
-
-export function saveAdminToken(token: string) {
+function removeLegacyAdminTokens() {
   if (!isBrowser()) return;
 
-  const cleanToken = token.trim();
-
-  if (cleanToken) {
-    window.localStorage.setItem(ADMIN_TOKEN_KEY, cleanToken);
+  for (const key of LEGACY_ADMIN_TOKEN_KEYS) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch {
+      // LocalStorage may be unavailable in restricted browser modes.
+    }
   }
+}
 
+/**
+ * Kept only for compatibility with older components.
+ * Secure admin tokens now live exclusively in httpOnly cookies.
+ */
+export function readAdminToken() {
+  removeLegacyAdminTokens();
+  return "";
+}
+
+/**
+ * Kept only for compatibility. The supplied token is intentionally ignored.
+ */
+export function saveAdminToken(_token: string) {
+  removeLegacyAdminTokens();
   window.dispatchEvent(new CustomEvent("feloral-editor-token"));
 }
 
 export function clearAdminToken() {
-  if (!isBrowser()) return;
-  window.localStorage.removeItem(ADMIN_TOKEN_KEY);
+  removeLegacyAdminTokens();
   window.dispatchEvent(new CustomEvent("feloral-editor-token"));
 }

@@ -1,6 +1,7 @@
-﻿"use client";
+"use client";
 
 import { canUseCmsEditor } from "@/lib/cms-editor-access";
+import { adminFetch } from "@/lib/admin-fetch";
 
 import { useEffect } from "react";
 
@@ -308,12 +309,9 @@ function clearHeroVisual() {
   unhideEverythingPreviouslyHidden();
 }
 
-async function fetchJson(url: string, token?: string) {
-  const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-
+async function fetchJson(url: string) {
   try {
-    const res = await fetch(url, { headers, cache: "no-store" });
+    const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -321,49 +319,18 @@ async function fetchJson(url: string, token?: string) {
   }
 }
 
-function tokenFromStorage(silent = true) {
-  const keys = Object.keys(window.localStorage);
-  const priority = keys.filter((key) => /cms|admin|access|token|auth/i.test(key));
-  const all = [...priority, ...keys.filter((key) => !priority.includes(key))];
-
-  for (const key of all) {
-    const value = window.localStorage.getItem(key) || "";
-    if (!value) continue;
-
-    if (/^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+$/.test(value)) return value;
-
-    try {
-      const parsed = JSON.parse(value);
-      if (typeof parsed === "string" && parsed.includes(".")) return parsed;
-      if (parsed?.accessToken) return String(parsed.accessToken);
-      if (parsed?.token) return String(parsed.token);
-      if (parsed?.access_token) return String(parsed.access_token);
-    } catch {
-      // ignore
-    }
-  }
-
-  if (silent) return "";
-  return window.prompt("Access Token Ø±Ø§ ÙˆØ§Ø±Ø¯ Ú©Ù†:") || "";
-}
-
 async function fetchAllCmsCandidates() {
-  const token = tokenFromStorage(true);
   const base = apiBase();
 
   const urls = [
     `${base}/cms/public/homepage`,
     `${base}/cms/public/theme`,
-    `${base}/cms/admin/homepage`,
-    `${base}/cms/admin/contents`,
-    `${base}/cms/admin/sections`,
-    `${base}/cms/admin/theme`,
   ];
 
   const candidates: Candidate[] = [];
 
   for (const url of urls) {
-    const json = await fetchJson(url, token);
+    const json = await fetchJson(url);
     if (!json) continue;
     candidates.push(...collectCandidates(json));
   }
@@ -372,10 +339,7 @@ async function fetchAllCmsCandidates() {
 }
 
 async function patchContentKey(key: string, value: string) {
-  const token = tokenFromStorage(false);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) headers.Authorization = `Bearer ${token}`;
-
   const safeKey = encodeURIComponent(key);
   const bodies = [
     { value },
@@ -388,7 +352,7 @@ async function patchContentKey(key: string, value: string) {
 
   for (const body of bodies) {
     try {
-      const res = await fetch(`${apiBase()}/cms/admin/contents/${safeKey}`, {
+      const res = await adminFetch(`/api/admin/cms/contents/${safeKey}`, {
         method: "PATCH",
         headers,
         body: JSON.stringify(body),
@@ -416,8 +380,8 @@ async function deleteHeroBackground() {
 
   clearHeroVisual();
 
-  if (ok) window.alert("Ø¹Ú©Ø³ Ù¾Ø³â€ŒØ²Ù…ÛŒÙ†Ù‡ Ù‡ÛŒØ±Ùˆ Ø­Ø°Ù Ø´Ø¯.");
-  else window.alert("Ø¹Ú©Ø³ Ø§Ø² ØµÙØ­Ù‡ Ø­Ø°Ù Ø´Ø¯. Ø§Ú¯Ø± Ø¨Ø¹Ø¯ Ø§Ø² Ø±ÙØ±Ø´ Ø¨Ø±Ú¯Ø´ØªØŒ ÛŒÚ©â€ŒØ¨Ø§Ø± Access Token Ø±Ø§ ÙˆØ§Ø±Ø¯ Ú©Ù†.");
+  if (ok) window.alert("عکس پس‌زمینه هیرو حذف شد.");
+  else window.alert("عکس از صفحه حذف شد، اما ذخیره در CMS انجام نشد.");
 }
 
 function removeInlineDeleteButtons() {
@@ -425,7 +389,7 @@ function removeInlineDeleteButtons() {
 
   Array.from(document.querySelectorAll("button")).forEach((button) => {
     const text = (button.textContent || "").trim();
-    if (text === "Ø­Ø°Ù Ø¹Ú©Ø³" && !button.hasAttribute("data-feloral-delete-hero-bg")) {
+    if (text === "حذف عکس" && !button.hasAttribute("data-feloral-delete-hero-bg")) {
       const parent = button.parentElement;
       button.remove();
       if (parent?.hasAttribute("data-feloral-delete-wrapper")) parent.remove();
@@ -443,7 +407,7 @@ function makeFloatingDeleteButton() {
   const button = document.createElement("button");
   button.type = "button";
   button.dataset.feloralDeleteHeroBg = "true";
-  button.textContent = "Ø­Ø°Ù Ø¹Ú©Ø³ Ù‡ÛŒØ±Ùˆ";
+  button.textContent = "حذف عکس هیرو";
   button.style.position = "fixed";
   button.style.left = "18px";
   button.style.bottom = "68px";

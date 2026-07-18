@@ -1,6 +1,7 @@
-﻿"use client";
+"use client";
 
 import { canUseCmsEditor } from "@/lib/cms-editor-access";
+import { adminFetch } from "@/lib/admin-fetch";
 
 import { useEffect } from "react";
 
@@ -28,10 +29,10 @@ const OLD_DELETE_KEYS = [
 ];
 
 const TEXT_KEYS = [
-  { id: "eyebrow", key: "home.hero.eyebrow", label: "Ø¨Ø§Ù„Ø§Ù†ÙˆÛŒØ³ Ù‡ÛŒØ±Ùˆ" },
-  { id: "title", key: "home.hero.title", label: "Ø¹Ù†ÙˆØ§Ù† Ù‡ÛŒØ±Ùˆ" },
-  { id: "subtitle", key: "home.hero.subtitle", label: "Ø²ÛŒØ±Ø¹Ù†ÙˆØ§Ù† Ù‡ÛŒØ±Ùˆ" },
-  { id: "cta", key: "home.hero.cta", label: "Ø¯Ú©Ù…Ù‡ Ù‡ÛŒØ±Ùˆ" },
+  { id: "eyebrow", key: "home.hero.eyebrow", label: "بالانویس هیرو" },
+  { id: "title", key: "home.hero.title", label: "عنوان هیرو" },
+  { id: "subtitle", key: "home.hero.subtitle", label: "زیرعنوان هیرو" },
+  { id: "cta", key: "home.hero.cta", label: "دکمه هیرو" },
 ];
 
 const HERO_BG_KEYS = [
@@ -88,38 +89,9 @@ function setImportant(el: HTMLElement, key: string, value: string) {
   el.style.setProperty(key, value, "important");
 }
 
-function tokenFromStorage(silent = true) {
-  const keys = Object.keys(window.localStorage);
-  const priority = keys.filter((key) => /cms|admin|access|token|auth/i.test(key));
-  const all = [...priority, ...keys.filter((key) => !priority.includes(key))];
-
-  for (const key of all) {
-    const value = window.localStorage.getItem(key) || "";
-    if (!value) continue;
-
-    if (/^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+$/.test(value)) return value;
-
-    try {
-      const parsed = JSON.parse(value);
-      if (typeof parsed === "string" && parsed.includes(".")) return parsed;
-      if (parsed?.accessToken) return String(parsed.accessToken);
-      if (parsed?.token) return String(parsed.token);
-      if (parsed?.access_token) return String(parsed.access_token);
-    } catch {
-      // ignore
-    }
-  }
-
-  if (silent) return "";
-  return window.prompt("Access Token Ø±Ø§ ÙˆØ§Ø±Ø¯ Ú©Ù†:") || "";
-}
-
-async function fetchJson(url: string, token?: string) {
-  const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-
+async function fetchJson(url: string) {
   try {
-    const res = await fetch(url, { headers, cache: "no-store" });
+    const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -128,22 +100,17 @@ async function fetchJson(url: string, token?: string) {
 }
 
 async function fetchCmsData() {
-  const token = tokenFromStorage(true);
   const base = apiBase();
 
   const urls = [
     `${base}/cms/public/homepage`,
     `${base}/cms/public/theme`,
-    `${base}/cms/admin/homepage`,
-    `${base}/cms/admin/contents`,
-    `${base}/cms/admin/sections`,
-    `${base}/cms/admin/theme`,
   ];
 
   const result: unknown[] = [];
 
   for (const url of urls) {
-    const json = await fetchJson(url, token);
+    const json = await fetchJson(url);
     if (json) result.push(json);
   }
 
@@ -559,16 +526,13 @@ function clearHeroBackground(targets?: Array<{ el: HTMLElement }>) {
 }
 
 async function patchContent(key: string, value: string) {
-  const token = tokenFromStorage(false);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const url = `${apiBase()}/cms/admin/contents/${encodeURIComponent(key)}`;
+  const url = `/api/admin/cms/contents/${encodeURIComponent(key)}`;
   const bodies = [{ value }, { content: value }, { text: value }, { mediaUrl: value }, { imageUrl: value }, { url: value }];
 
   for (const body of bodies) {
     try {
-      const res = await fetch(url, { method: "PATCH", headers, body: JSON.stringify(body) });
+      const res = await adminFetch(url, { method: "PATCH", headers, body: JSON.stringify(body) });
       if (res.ok) return true;
     } catch {
       // try next body
@@ -591,8 +555,8 @@ async function deleteHeroBackground(targets?: Array<{ el: HTMLElement }>) {
 
   clearHeroBackground(targets);
 
-  if (ok) window.alert("Ø¹Ú©Ø³ Ù¾Ø³â€ŒØ²Ù…ÛŒÙ†Ù‡ Ù‡ÛŒØ±Ùˆ Ø­Ø°Ù Ø´Ø¯.");
-  else window.alert("Ø¹Ú©Ø³ Ø§Ø² ØµÙØ­Ù‡ Ø­Ø°Ù Ø´Ø¯. Ø§Ú¯Ø± Ø¨Ø±Ú¯Ø´ØªØŒ ÛŒÚ©â€ŒØ¨Ø§Ø± Access Token Ø±Ø§ ÙˆØ§Ø±Ø¯ Ú©Ù†.");
+  if (ok) window.alert("عکس پس‌زمینه هیرو حذف شد.");
+  else window.alert("عکس از صفحه حذف شد، اما ذخیره در CMS انجام نشد.");
 }
 
 function removeRuntimeUi() {
@@ -604,7 +568,7 @@ function removeRuntimeUi() {
 
   Array.from(document.querySelectorAll("button")).forEach((button) => {
     const text = (button.textContent || "").trim();
-    if (text === "Ø­Ø°Ù Ø¹Ú©Ø³" && !button.hasAttribute("data-feloral-delete-hero-bg")) button.remove();
+    if (text === "حذف عکس" && !button.hasAttribute("data-feloral-delete-hero-bg")) button.remove();
   });
 }
 
@@ -615,7 +579,7 @@ function floatingDelete(targets?: Array<{ el: HTMLElement }>) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.dataset.feloralDeleteHeroBg = "true";
-  btn.textContent = "Ø­Ø°Ù Ø¹Ú©Ø³ Ù‡ÛŒØ±Ùˆ";
+  btn.textContent = "حذف عکس هیرو";
 
   setImportant(btn, "position", "fixed");
   setImportant(btn, "left", "18px");
@@ -664,7 +628,7 @@ function makeTextDraggable(targets: Array<{ id: string; label: string; el: HTMLE
     handle.type = "button";
     handle.dataset.feloralHeroDragHandle = "true";
     handle.dataset.feloralHeroDragHandleId = target.id;
-    handle.textContent = `Ø¬Ø§Ø¨Ø¬Ø§ÛŒÛŒ ${target.label}`;
+    handle.textContent = `جابجایی ${target.label}`;
 
     setImportant(handle, "position", "fixed");
     setImportant(handle, "z-index", "100005");
@@ -777,8 +741,8 @@ function heroNav(targets?: Array<{ el: HTMLElement }>) {
     const text = (el.textContent || "").trim();
     const meta = `${text} ${el.getAttribute("aria-label") || ""} ${el.getAttribute("title") || ""}`.toLowerCase();
 
-    const prev = /Ù‚Ø¨Ù„ÛŒ|previous|prev/.test(meta) || text === "â€¹" || text === "â†";
-    const next = /Ø¨Ø¹Ø¯ÛŒ|next/.test(meta) || text === "â€º" || text === "â†’";
+    const prev = /قبلی|previous|prev/.test(meta) || text === "‹" || text === "←";
+    const next = /بعدی|next/.test(meta) || text === "›" || text === "→";
 
     if (!prev && !next) return;
 
@@ -824,10 +788,10 @@ function heroNav(targets?: Array<{ el: HTMLElement }>) {
     btn.style.backdropFilter = "blur(10px)";
   });
 
-  prev.textContent = "â€¹";
-  next.textContent = "â€º";
-  prev.title = "Ø¹Ú©Ø³ Ù‚Ø¨Ù„ÛŒ";
-  next.title = "Ø¹Ú©Ø³ Ø¨Ø¹Ø¯ÛŒ";
+  prev.textContent = "‹";
+  next.textContent = "›";
+  prev.title = "عکس قبلی";
+  next.title = "عکس بعدی";
 
   prev.onclick = (event) => {
     event.preventDefault();

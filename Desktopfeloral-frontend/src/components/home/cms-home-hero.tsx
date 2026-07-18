@@ -1,8 +1,15 @@
-﻿"use client";
+"use client";
 
 import { canUseCmsEditor } from "@/lib/cms-editor-access";
+import { adminFetch } from "@/lib/admin-fetch";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { CmsHomepageResponse } from "@/lib/cms/types";
@@ -139,7 +146,11 @@ const HERO_SLIDES: HeroSlide[] = [
   },
 ];
 
-const LEGACY_BG_KEYS = ["home.hero.background", "home.hero.image", "home.hero.bannerImage"];
+const LEGACY_BG_KEYS = [
+  "home.hero.background",
+  "home.hero.image",
+  "home.hero.bannerImage",
+];
 
 const DRAG_ITEMS = [
   { id: "eyebrow", label: "بالانویس هیرو", minFont: 10, maxFont: 34 },
@@ -172,9 +183,15 @@ function normalizeAssetUrl(value: string) {
   const raw = String(value || "").trim();
 
   if (!raw) return "";
-  if (/^https?:\/\//i.test(raw) || raw.startsWith("data:") || raw.startsWith("blob:")) return raw;
+  if (
+    /^https?:\/\//i.test(raw) ||
+    raw.startsWith("data:") ||
+    raw.startsWith("blob:")
+  )
+    return raw;
   if (raw.startsWith("/")) return `${getApiBaseUrl()}${raw}`;
-  if (/^(uploads|media|files|static)\//i.test(raw)) return `${getApiBaseUrl()}/${raw}`;
+  if (/^(uploads|media|files|static)\//i.test(raw))
+    return `${getApiBaseUrl()}/${raw}`;
 
   return raw;
 }
@@ -193,7 +210,9 @@ function isImageUrl(value: string) {
 }
 
 function uniqueImages(images: string[]) {
-  return Array.from(new Set(images.map(normalizeAssetUrl).filter(Boolean).filter(isImageUrl)));
+  return Array.from(
+    new Set(images.map(normalizeAssetUrl).filter(Boolean).filter(isImageUrl)),
+  );
 }
 
 function readOldImages() {
@@ -225,14 +244,19 @@ function readSlotOverrides(): SlotMap {
   if (typeof window === "undefined") return {};
 
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(HERO_SLOT_OVERRIDES_KEY) || "{}");
+    const parsed = JSON.parse(
+      window.localStorage.getItem(HERO_SLOT_OVERRIDES_KEY) || "{}",
+    );
 
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return {};
 
     const clean: SlotMap = {};
 
     for (const slide of HERO_SLIDES) {
-      const value = normalizeAssetUrl(String((parsed as Record<string, unknown>)[slide.backgroundKey] || ""));
+      const value = normalizeAssetUrl(
+        String((parsed as Record<string, unknown>)[slide.backgroundKey] || ""),
+      );
 
       if (value && isImageUrl(value)) {
         clean[slide.backgroundKey] = value;
@@ -267,13 +291,17 @@ function readDeletedSlots() {
   if (typeof window === "undefined") return [] as string[];
 
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(HERO_DELETED_SLOTS_KEY) || "[]");
+    const parsed = JSON.parse(
+      window.localStorage.getItem(HERO_DELETED_SLOTS_KEY) || "[]",
+    );
 
     if (!Array.isArray(parsed)) return [];
 
     return parsed
       .map((item) => String(item || ""))
-      .filter((key) => HERO_SLIDES.some((slide) => slide.backgroundKey === key));
+      .filter((key) =>
+        HERO_SLIDES.some((slide) => slide.backgroundKey === key),
+      );
   } catch {
     return [];
   }
@@ -281,7 +309,11 @@ function readDeletedSlots() {
 
 function writeDeletedSlots(keys: string[]) {
   const clean = Array.from(
-    new Set(keys.filter((key) => HERO_SLIDES.some((slide) => slide.backgroundKey === key))),
+    new Set(
+      keys.filter((key) =>
+        HERO_SLIDES.some((slide) => slide.backgroundKey === key),
+      ),
+    ),
   );
 
   window.localStorage.setItem(HERO_DELETED_SLOTS_KEY, JSON.stringify(clean));
@@ -330,7 +362,10 @@ function normalizeStroke(raw: unknown): TextStroke {
   }
 
   const record = value as Record<string, unknown>;
-  const colorRaw = typeof record.color === "string" ? record.color.trim() : DEFAULT_STROKE.color;
+  const colorRaw =
+    typeof record.color === "string"
+      ? record.color.trim()
+      : DEFAULT_STROKE.color;
   const color = /^#?[0-9a-f]{3,8}$/i.test(colorRaw)
     ? colorRaw.startsWith("#")
       ? colorRaw
@@ -351,13 +386,18 @@ function readTextStrokeOverrides(): TextStrokeMap {
   if (typeof window === "undefined") return {};
 
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(TEXT_STROKE_STORAGE_KEY) || "{}");
+    const parsed = JSON.parse(
+      window.localStorage.getItem(TEXT_STROKE_STORAGE_KEY) || "{}",
+    );
 
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return {};
 
     const clean: TextStrokeMap = {};
 
-    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    for (const [key, value] of Object.entries(
+      parsed as Record<string, unknown>,
+    )) {
       const stroke = normalizeStroke(value);
 
       if (stroke.width || stroke.size) {
@@ -419,7 +459,10 @@ function isHeroSlideBgKey(key: string) {
 }
 
 function slideIndexByBgKey(key: string) {
-  return Math.max(0, HERO_SLIDES.find((slide) => slide.backgroundKey === key)?.index ?? 0);
+  return Math.max(
+    0,
+    HERO_SLIDES.find((slide) => slide.backgroundKey === key)?.index ?? 0,
+  );
 }
 
 function setImportant(el: HTMLElement, key: string, value: string) {
@@ -473,7 +516,13 @@ function extractCmsValueByKey(data: unknown, key: string): unknown {
       (typeof record.name === "string" ? record.name : "");
 
     if (nodeKey === key) {
-      found = record.value ?? record.plainText ?? record.text ?? record.content ?? record.data ?? undefined;
+      found =
+        record.value ??
+        record.plainText ??
+        record.text ??
+        record.content ??
+        record.data ??
+        undefined;
       return;
     }
 
@@ -519,7 +568,9 @@ function mergeDragMaps(...maps: DragMap[]) {
 
 function applyDragMapToDom(map: DragMap) {
   for (const item of DRAG_ITEMS) {
-    const el = document.querySelector(`[data-feloral-hero-drag="${item.id}"]`) as HTMLElement | null;
+    const el = document.querySelector(
+      `[data-feloral-hero-drag="${item.id}"]`,
+    ) as HTMLElement | null;
     const pos = map[item.id];
 
     if (el && pos) {
@@ -529,13 +580,8 @@ function applyDragMapToDom(map: DragMap) {
 }
 
 async function saveContentKey(key: string, value: string) {
-  const token = getTokenFromStorage(false);
-
-  if (!token) return false;
-
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
   };
 
   const patchBodies = [
@@ -548,11 +594,14 @@ async function saveContentKey(key: string, value: string) {
 
   for (const body of patchBodies) {
     try {
-      const response = await fetch(`${getApiBaseUrl()}/cms/admin/contents/${encodeURIComponent(key)}`, {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify(body),
-      });
+      const response = await adminFetch(
+        `/api/admin/cms/contents/${encodeURIComponent(key)}`,
+        {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify(body),
+        },
+      );
 
       if (response.ok) return true;
     } catch {
@@ -584,7 +633,7 @@ async function saveContentKey(key: string, value: string) {
 
   for (const body of postBodies) {
     try {
-      const response = await fetch(`${getApiBaseUrl()}/cms/admin/contents`, {
+      const response = await adminFetch("/api/admin/cms/contents", {
         method: "POST",
         headers,
         body: JSON.stringify(body),
@@ -599,43 +648,12 @@ async function saveContentKey(key: string, value: string) {
   return false;
 }
 
-function getTokenFromStorage(silent = true) {
-  if (typeof window === "undefined") return "";
-
-  const keys = Object.keys(window.localStorage);
-  const priority = keys.filter((key) => /cms|admin|access|token|auth/i.test(key));
-  const all = [...priority, ...keys.filter((key) => !priority.includes(key))];
-
-  for (const key of all) {
-    const value = window.localStorage.getItem(key) || "";
-
-    if (!value) continue;
-
-    if (/^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+$/.test(value)) {
-      return value;
-    }
-
-    try {
-      const parsed = JSON.parse(value);
-
-      if (typeof parsed === "string" && parsed.includes(".")) return parsed;
-      if (parsed?.accessToken) return String(parsed.accessToken);
-      if (parsed?.token) return String(parsed.token);
-      if (parsed?.access_token) return String(parsed.access_token);
-    } catch {
-      // ignore
-    }
-  }
-
-  if (silent) return "";
-
-  return window.prompt("Access Token را وارد کن:") || "";
-}
-
 function showSaveStatus(text: string, ok = true) {
   if (typeof document === "undefined" || !isEditorMode()) return;
 
-  let badge = document.querySelector("[data-feloral-hero-save-status='true']") as HTMLElement | null;
+  let badge = document.querySelector(
+    "[data-feloral-hero-save-status='true']",
+  ) as HTMLElement | null;
 
   if (!badge) {
     badge = document.createElement("div");
@@ -654,7 +672,9 @@ function showSaveStatus(text: string, ok = true) {
 
   badge.textContent = text;
   badge.style.background = ok ? "rgba(20,70,38,.92)" : "rgba(85,28,28,.92)";
-  badge.style.border = ok ? "1px solid rgba(114,255,170,.45)" : "1px solid rgba(255,120,120,.45)";
+  badge.style.border = ok
+    ? "1px solid rgba(114,255,170,.45)"
+    : "1px solid rgba(255,120,120,.45)";
   badge.style.color = ok ? "#eafff1" : "#ffecec";
 
   window.setTimeout(() => {
@@ -671,7 +691,7 @@ async function persistLayout(map: DragMap) {
   if (ok) {
     showSaveStatus("جایگاه هیرو ذخیره شد", true);
   } else {
-    showSaveStatus("در مرورگر ذخیره شد؛ برای ذخیره CMS توکن لازم است", false);
+    showSaveStatus("در مرورگر ذخیره شد؛ ذخیره در CMS انجام نشد", false);
   }
 }
 
@@ -714,12 +734,18 @@ function installHeroDragAndResizeHandles() {
   const saved = readDragMap();
 
   for (const item of DRAG_ITEMS) {
-    const target = document.querySelector(`[data-feloral-hero-drag="${item.id}"]`) as HTMLElement | null;
+    const target = document.querySelector(
+      `[data-feloral-hero-drag="${item.id}"]`,
+    ) as HTMLElement | null;
 
     if (!target) continue;
 
-    document.querySelector(`[data-feloral-hero-drag-handle-id="${item.id}"]`)?.remove();
-    document.querySelector(`[data-feloral-hero-resize-handle-id="${item.id}"]`)?.remove();
+    document
+      .querySelector(`[data-feloral-hero-drag-handle-id="${item.id}"]`)
+      ?.remove();
+    document
+      .querySelector(`[data-feloral-hero-resize-handle-id="${item.id}"]`)
+      ?.remove();
 
     if (saved[item.id]) {
       applyDragPosition(target, saved[item.id]);
@@ -789,7 +815,9 @@ function installHeroDragAndResizeHandles() {
       const startY = event.clientY;
       const startLeft = rect.left;
       const startTop = rect.top;
-      const currentFontSize = Number.parseFloat(window.getComputedStyle(target).fontSize || "16");
+      const currentFontSize = Number.parseFloat(
+        window.getComputedStyle(target).fontSize || "16",
+      );
 
       applyDragPosition(target, {
         left: Math.round(startLeft),
@@ -805,8 +833,14 @@ function installHeroDragAndResizeHandles() {
       const onMove = (moveEvent: PointerEvent) => {
         moveEvent.preventDefault();
 
-        const left = Math.max(0, Math.round(startLeft + moveEvent.clientX - startX));
-        const top = Math.max(0, Math.round(startTop + moveEvent.clientY - startY));
+        const left = Math.max(
+          0,
+          Math.round(startLeft + moveEvent.clientX - startX),
+        );
+        const top = Math.max(
+          0,
+          Math.round(startTop + moveEvent.clientY - startY),
+        );
 
         setImportant(target, "left", `${left}px`);
         setImportant(target, "top", `${top}px`);
@@ -820,7 +854,9 @@ function installHeroDragAndResizeHandles() {
 
         const finalRect = target.getBoundingClientRect();
         const next = readDragMap();
-        const finalFontSize = Number.parseFloat(window.getComputedStyle(target).fontSize || `${currentFontSize}`);
+        const finalFontSize = Number.parseFloat(
+          window.getComputedStyle(target).fontSize || `${currentFontSize}`,
+        );
 
         next[item.id] = {
           left: Math.max(0, Math.round(finalRect.left)),
@@ -851,7 +887,9 @@ function installHeroDragAndResizeHandles() {
       const rect = target.getBoundingClientRect();
       const startX = event.clientX;
       const startWidth = Math.max(40, rect.width);
-      const startFontSize = Number.parseFloat(window.getComputedStyle(target).fontSize || "16");
+      const startFontSize = Number.parseFloat(
+        window.getComputedStyle(target).fontSize || "16",
+      );
 
       applyDragPosition(target, {
         left: Math.round(rect.left),
@@ -869,7 +907,11 @@ function installHeroDragAndResizeHandles() {
         const delta = moveEvent.clientX - startX;
         const nextWidth = clamp(Math.round(startWidth + delta), 80, 980);
         const ratio = nextWidth / startWidth;
-        const nextFontSize = clamp(Math.round(startFontSize * ratio * 10) / 10, item.minFont, item.maxFont);
+        const nextFontSize = clamp(
+          Math.round(startFontSize * ratio * 10) / 10,
+          item.minFont,
+          item.maxFont,
+        );
 
         setImportant(target, "width", `${nextWidth}px`);
         setImportant(target, "font-size", `${nextFontSize}px`);
@@ -888,7 +930,9 @@ function installHeroDragAndResizeHandles() {
 
         const finalRect = target.getBoundingClientRect();
         const next = readDragMap();
-        const finalFontSize = Number.parseFloat(window.getComputedStyle(target).fontSize || `${startFontSize}`);
+        const finalFontSize = Number.parseFloat(
+          window.getComputedStyle(target).fontSize || `${startFontSize}`,
+        );
 
         next[item.id] = {
           left: Math.max(0, Math.round(finalRect.left)),
@@ -918,7 +962,11 @@ function installHeroDragAndResizeHandles() {
     cleanups.push(() => {
       window.clearInterval(interval);
       moveHandle.removeEventListener("pointerdown", onMovePointerDown, true);
-      resizeHandle.removeEventListener("pointerdown", onResizePointerDown, true);
+      resizeHandle.removeEventListener(
+        "pointerdown",
+        onResizePointerDown,
+        true,
+      );
       moveHandle.remove();
       resizeHandle.remove();
     });
@@ -934,15 +982,17 @@ function removeOldRuntimeDom() {
     )
     .forEach((node) => node.remove());
 
-  document.querySelectorAll("[data-feloral-hero-visual-hidden='true']").forEach((node) => {
-    const el = node as HTMLElement;
+  document
+    .querySelectorAll("[data-feloral-hero-visual-hidden='true']")
+    .forEach((node) => {
+      const el = node as HTMLElement;
 
-    el.style.removeProperty("display");
-    el.style.removeProperty("visibility");
-    el.style.removeProperty("opacity");
+      el.style.removeProperty("display");
+      el.style.removeProperty("visibility");
+      el.style.removeProperty("opacity");
 
-    delete el.dataset.feloralHeroVisualHidden;
-  });
+      delete el.dataset.feloralHeroVisualHidden;
+    });
 
   Array.from(document.querySelectorAll("button")).forEach((button) => {
     const text = (button.textContent || "").trim();
@@ -960,7 +1010,10 @@ function strokeToStyle(stroke: TextStroke): CSSProperties {
 
   const shadow =
     clean.size > 0
-      ? [`0 0 ${clean.size}px ${clean.color}`, `0 0 ${Math.max(1, clean.size / 2)}px ${clean.color}`].join(", ")
+      ? [
+          `0 0 ${clean.size}px ${clean.color}`,
+          `0 0 ${Math.max(1, clean.size / 2)}px ${clean.color}`,
+        ].join(", ")
       : undefined;
 
   return {
@@ -977,7 +1030,9 @@ export function CmsHomeHero({ cms }: Props) {
   const [slotOverrides, setSlotOverrides] = useState<SlotMap>({});
   const [deletedSlots, setDeletedSlots] = useState<string[]>([]);
   const [oldImages, setOldImages] = useState<string[]>([]);
-  const [textStrokeOverrides, setTextStrokeOverrides] = useState<TextStrokeMap>({});
+  const [textStrokeOverrides, setTextStrokeOverrides] = useState<TextStrokeMap>(
+    {},
+  );
 
   const lastCmsLayoutRef = useRef("");
 
@@ -991,17 +1046,36 @@ export function CmsHomeHero({ cms }: Props) {
 
   const activeSlide = HERO_SLIDES[activeIndex] || HERO_SLIDES[0];
 
-  const eyebrow = getText(liveCms, activeSlide.eyebrowKey, activeSlide.defaultEyebrow);
-  const title = getText(liveCms, activeSlide.titleKey, activeSlide.defaultTitle);
-  const subtitle = getText(liveCms, activeSlide.subtitleKey, activeSlide.defaultSubtitle);
+  const eyebrow = getText(
+    liveCms,
+    activeSlide.eyebrowKey,
+    activeSlide.defaultEyebrow,
+  );
+  const title = getText(
+    liveCms,
+    activeSlide.titleKey,
+    activeSlide.defaultTitle,
+  );
+  const subtitle = getText(
+    liveCms,
+    activeSlide.subtitleKey,
+    activeSlide.defaultSubtitle,
+  );
   const cta = getText(liveCms, activeSlide.ctaKey, activeSlide.defaultCta);
 
   const cmsTextStrokeMap = useMemo(() => {
     const next: TextStrokeMap = {};
-    const keys = HERO_SLIDES.flatMap((slide) => [slide.eyebrowKey, slide.titleKey, slide.subtitleKey, slide.ctaKey]);
+    const keys = HERO_SLIDES.flatMap((slide) => [
+      slide.eyebrowKey,
+      slide.titleKey,
+      slide.subtitleKey,
+      slide.ctaKey,
+    ]);
 
     for (const key of keys) {
-      const stroke = normalizeStroke(extractCmsValueByKey(liveCms, `${key}.stroke`));
+      const stroke = normalizeStroke(
+        extractCmsValueByKey(liveCms, `${key}.stroke`),
+      );
 
       if (stroke.width || stroke.size) {
         next[key] = stroke;
@@ -1020,7 +1094,9 @@ export function CmsHomeHero({ cms }: Props) {
   };
 
   const legacyImages = useMemo(() => {
-    return uniqueImages(LEGACY_BG_KEYS.map((key) => getImageUrl(liveCms, key, "")));
+    return uniqueImages(
+      LEGACY_BG_KEYS.map((key) => getImageUrl(liveCms, key, "")),
+    );
   }, [liveCms]);
 
   const slides = useMemo(() => {
@@ -1047,13 +1123,16 @@ export function CmsHomeHero({ cms }: Props) {
     setTextStrokeOverrides(readTextStrokeOverrides());
     setOldImages(readOldImages());
 
-    const savedIndex = Number(window.localStorage.getItem(HERO_IMAGE_INDEX_KEY) || "0") || 0;
+    const savedIndex =
+      Number(window.localStorage.getItem(HERO_IMAGE_INDEX_KEY) || "0") || 0;
     setActiveIndex(clamp(savedIndex, 0, 3));
   }, []);
 
   useEffect(() => {
     const onTextStrokeUpdated = (event: Event) => {
-      const detail = (event as CustomEvent<{ key?: string; stroke?: TextStroke }>).detail;
+      const detail = (
+        event as CustomEvent<{ key?: string; stroke?: TextStroke }>
+      ).detail;
 
       if (!detail?.key) return;
 
@@ -1091,21 +1170,41 @@ export function CmsHomeHero({ cms }: Props) {
       setSlotOverrides(readSlotOverrides());
     };
 
-    window.addEventListener("feloral:text-stroke-updated", onTextStrokeUpdated as EventListener);
-    window.addEventListener("feloral:text-stroke-reset", onTextStrokeReset as EventListener);
-    window.addEventListener("feloral:hero-slide-deleted", onSlideDeleted as EventListener);
+    window.addEventListener(
+      "feloral:text-stroke-updated",
+      onTextStrokeUpdated as EventListener,
+    );
+    window.addEventListener(
+      "feloral:text-stroke-reset",
+      onTextStrokeReset as EventListener,
+    );
+    window.addEventListener(
+      "feloral:hero-slide-deleted",
+      onSlideDeleted as EventListener,
+    );
 
     return () => {
-      window.removeEventListener("feloral:text-stroke-updated", onTextStrokeUpdated as EventListener);
-      window.removeEventListener("feloral:text-stroke-reset", onTextStrokeReset as EventListener);
-      window.removeEventListener("feloral:hero-slide-deleted", onSlideDeleted as EventListener);
+      window.removeEventListener(
+        "feloral:text-stroke-updated",
+        onTextStrokeUpdated as EventListener,
+      );
+      window.removeEventListener(
+        "feloral:text-stroke-reset",
+        onTextStrokeReset as EventListener,
+      );
+      window.removeEventListener(
+        "feloral:hero-slide-deleted",
+        onSlideDeleted as EventListener,
+      );
     };
   }, []);
 
   useEffect(() => {
     if (!liveCms || typeof window === "undefined") return;
 
-    const cmsLayout = safeParseDragMap(extractCmsValueByKey(liveCms, HERO_LAYOUT_CMS_KEY));
+    const cmsLayout = safeParseDragMap(
+      extractCmsValueByKey(liveCms, HERO_LAYOUT_CMS_KEY),
+    );
 
     if (!Object.keys(cmsLayout).length) return;
 
@@ -1172,7 +1271,9 @@ export function CmsHomeHero({ cms }: Props) {
       const response = await originalFetch(...args);
 
       try {
-        const requestUrl = String(args[0] instanceof Request ? args[0].url : args[0]);
+        const requestUrl = String(
+          args[0] instanceof Request ? args[0].url : args[0],
+        );
         const method =
           args[0] instanceof Request
             ? args[0].method
@@ -1181,14 +1282,30 @@ export function CmsHomeHero({ cms }: Props) {
               : "GET";
 
         const selectedKey = selectedEditorKey();
-        const selectedSlideKey = isHeroSlideBgKey(selectedKey) ? selectedKey : "";
+        const selectedSlideKey = isHeroSlideBgKey(selectedKey)
+          ? selectedKey
+          : "";
         const requestedSlideKey =
-          HERO_SLIDES.find((slide) => requestUrl.includes(encodeURIComponent(slide.backgroundKey)) || requestUrl.includes(slide.backgroundKey))
-            ?.backgroundKey || "";
+          HERO_SLIDES.find(
+            (slide) =>
+              requestUrl.includes(encodeURIComponent(slide.backgroundKey)) ||
+              requestUrl.includes(slide.backgroundKey),
+          )?.backgroundKey || "";
 
         const slideKey = selectedSlideKey || requestedSlideKey;
+        const requestInit = args[0] instanceof Request ? undefined : args[1];
+        const requestHeaders = new Headers(
+          args[0] instanceof Request ? args[0].headers : requestInit?.headers,
+        );
+        const isDeleteRequest =
+          method === "DELETE" ||
+          requestHeaders.get("x-feloral-image-delete") === "1";
 
-        if (/POST|PATCH|PUT/i.test(method) && slideKey) {
+        if (isDeleteRequest && slideKey) {
+          markSlideDeleted(slideKey);
+          setDeletedSlots(readDeletedSlots());
+          setSlotOverrides(readSlotOverrides());
+        } else if (/POST|PATCH|PUT/i.test(method) && slideKey) {
           response
             .clone()
             .json()
@@ -1204,7 +1321,10 @@ export function CmsHomeHero({ cms }: Props) {
               setSlotOverrides(nextOverrides);
               setActiveIndex(nextIndex);
 
-              window.localStorage.setItem(HERO_IMAGE_INDEX_KEY, String(nextIndex));
+              window.localStorage.setItem(
+                HERO_IMAGE_INDEX_KEY,
+                String(nextIndex),
+              );
             })
             .catch(() => {});
         }
@@ -1276,39 +1396,39 @@ export function CmsHomeHero({ cms }: Props) {
               <div className="absolute inset-0 z-[1] bg-black/30" />
 
               <div className="absolute inset-0 z-[2] flex items-center justify-center overflow-hidden">
-  <div className="relative inline-flex max-h-[96%] max-w-[96%] items-center justify-center">
-    {/* هاله بلور پشت عکس اصلی برای اینکه لبه‌ها نرم شوند */}
-    <img
-      key={`hero-main-glow-${activeIndex}-${currentBackground}`}
-      src={currentBackground}
-      alt=""
-      aria-hidden="true"
-      className="absolute inset-0 h-full w-full scale-[1.08] object-contain opacity-75"
-      style={{
-        filter: "blur(24px)",
-      }}
-      suppressHydrationWarning
-    />
+                <div className="relative inline-flex max-h-[96%] max-w-[96%] items-center justify-center">
+                  {/* هاله بلور پشت عکس اصلی برای اینکه لبه‌ها نرم شوند */}
+                  <img
+                    key={`hero-main-glow-${activeIndex}-${currentBackground}`}
+                    src={currentBackground}
+                    alt=""
+                    aria-hidden="true"
+                    className="absolute inset-0 h-full w-full scale-[1.08] object-contain opacity-75"
+                    style={{
+                      filter: "blur(24px)",
+                    }}
+                    suppressHydrationWarning
+                  />
 
-    {/* خود عکس اصلی با محوشدن چهار طرف */}
-    <img
-      key={`hero-main-${activeIndex}-${currentBackground}`}
-      src={currentBackground}
-      alt={`Feloral hero slide ${activeIndex + 1}`}
-      className="relative z-[1] max-h-full max-w-full object-contain"
-      style={{
-        filter: "drop-shadow(0 18px 45px rgba(0,0,0,.28))",
-        WebkitMaskImage:
-          "linear-gradient(to right, transparent 0%, rgba(0,0,0,.25) 5%, black 13%, black 87%, rgba(0,0,0,.25) 95%, transparent 100%), linear-gradient(to bottom, transparent 0%, rgba(0,0,0,.25) 5%, black 13%, black 87%, rgba(0,0,0,.25) 95%, transparent 100%)",
-        maskImage:
-          "linear-gradient(to right, transparent 0%, rgba(0,0,0,.25) 5%, black 13%, black 87%, rgba(0,0,0,.25) 95%, transparent 100%), linear-gradient(to bottom, transparent 0%, rgba(0,0,0,.25) 5%, black 13%, black 87%, rgba(0,0,0,.25) 95%, transparent 100%)",
-        WebkitMaskComposite: "source-in",
-        maskComposite: "intersect",
-      }}
-      suppressHydrationWarning
-    />
-  </div>
-</div>
+                  {/* خود عکس اصلی با محوشدن چهار طرف */}
+                  <img
+                    key={`hero-main-${activeIndex}-${currentBackground}`}
+                    src={currentBackground}
+                    alt={`Feloral hero slide ${activeIndex + 1}`}
+                    className="relative z-[1] max-h-full max-w-full object-contain"
+                    style={{
+                      filter: "drop-shadow(0 18px 45px rgba(0,0,0,.28))",
+                      WebkitMaskImage:
+                        "linear-gradient(to right, transparent 0%, rgba(0,0,0,.25) 5%, black 13%, black 87%, rgba(0,0,0,.25) 95%, transparent 100%), linear-gradient(to bottom, transparent 0%, rgba(0,0,0,.25) 5%, black 13%, black 87%, rgba(0,0,0,.25) 95%, transparent 100%)",
+                      maskImage:
+                        "linear-gradient(to right, transparent 0%, rgba(0,0,0,.25) 5%, black 13%, black 87%, rgba(0,0,0,.25) 95%, transparent 100%), linear-gradient(to bottom, transparent 0%, rgba(0,0,0,.25) 5%, black 13%, black 87%, rgba(0,0,0,.25) 95%, transparent 100%)",
+                      WebkitMaskComposite: "source-in",
+                      maskComposite: "intersect",
+                    }}
+                    suppressHydrationWarning
+                  />
+                </div>
+              </div>
 
               <div className="absolute inset-0 z-[3] bg-[radial-gradient(circle_at_18%_50%,rgba(214,168,79,.18),transparent_17rem)]" />
               <div className="absolute inset-0 z-[4] bg-gradient-to-l from-black/72 via-black/36 to-black/10" />
@@ -1359,7 +1479,11 @@ export function CmsHomeHero({ cms }: Props) {
                   ...getTextStrokeStyle(activeSlide.eyebrowKey),
                 }}
               >
-                <CmsEditMarker cmsKey={activeSlide.eyebrowKey} sectionKey="home.hero" label={`متن کوچک هیرو ${activeIndex + 1}`}>
+                <CmsEditMarker
+                  cmsKey={activeSlide.eyebrowKey}
+                  sectionKey="home.hero"
+                  label={`متن کوچک هیرو ${activeIndex + 1}`}
+                >
                   {eyebrow}
                 </CmsEditMarker>
               </p>
@@ -1369,7 +1493,11 @@ export function CmsHomeHero({ cms }: Props) {
                 className="mt-4 text-[46px] font-black leading-[1.34] tracking-[-.02em] text-white"
                 style={getTextStrokeStyle(activeSlide.titleKey)}
               >
-                <CmsEditMarker cmsKey={activeSlide.titleKey} sectionKey="home.hero" label={`عنوان اصلی هیرو ${activeIndex + 1}`}>
+                <CmsEditMarker
+                  cmsKey={activeSlide.titleKey}
+                  sectionKey="home.hero"
+                  label={`عنوان اصلی هیرو ${activeIndex + 1}`}
+                >
                   {title}
                 </CmsEditMarker>
               </h1>
@@ -1379,7 +1507,11 @@ export function CmsHomeHero({ cms }: Props) {
                 className="mt-4 whitespace-pre-line text-[19px] font-medium leading-9 text-white/88"
                 style={getTextStrokeStyle(activeSlide.subtitleKey)}
               >
-                <CmsEditMarker cmsKey={activeSlide.subtitleKey} sectionKey="home.hero" label={`زیرعنوان هیرو ${activeIndex + 1}`}>
+                <CmsEditMarker
+                  cmsKey={activeSlide.subtitleKey}
+                  sectionKey="home.hero"
+                  label={`زیرعنوان هیرو ${activeIndex + 1}`}
+                >
                   {subtitle}
                 </CmsEditMarker>
               </p>
@@ -1393,7 +1525,11 @@ export function CmsHomeHero({ cms }: Props) {
                   ...getTextStrokeStyle(activeSlide.ctaKey),
                 }}
               >
-                <CmsEditMarker cmsKey={activeSlide.ctaKey} sectionKey="home.hero" label={`متن دکمه هیرو ${activeIndex + 1}`}>
+                <CmsEditMarker
+                  cmsKey={activeSlide.ctaKey}
+                  sectionKey="home.hero"
+                  label={`متن دکمه هیرو ${activeIndex + 1}`}
+                >
                   {cta}
                 </CmsEditMarker>
                 <ChevronLeft size={18} />
@@ -1409,8 +1545,12 @@ export function CmsHomeHero({ cms }: Props) {
                 onClick={() => goToSlide(slide.index)}
                 className="h-2 w-2 rounded-full transition"
                 style={{
-                  backgroundColor: slide.index === activeIndex ? accentColor : "rgba(255,255,255,.38)",
-                  transform: slide.index === activeIndex ? "scale(1.22)" : "scale(1)",
+                  backgroundColor:
+                    slide.index === activeIndex
+                      ? accentColor
+                      : "rgba(255,255,255,.38)",
+                  transform:
+                    slide.index === activeIndex ? "scale(1.22)" : "scale(1)",
                 }}
                 aria-label={`تصویر ${slide.index + 1} هیرو`}
               />
