@@ -17,14 +17,23 @@ import { CartModule } from './cart/cart.module';
 import { OrderModule } from './order/order.module';
 import { PaymentModule } from './payment/payment.module';
 import { CmsModule } from './cms/cms.module';
+import { AddressesModule } from './addresses/addresses.module';
+import { ShippingModule } from './shipping/shipping.module';
+import { CouponsModule } from './coupons/coupons.module';
+import { ReturnsModule } from './returns/returns.module';
+import { RefundsModule } from './refunds/refunds.module';
+import { InvoicesModule } from './invoices/invoices.module';
+import { PostexModule } from './postex/postex.module';
 import { ConfigModule } from '@nestjs/config';
+import { validateEnvironment } from './config/env.validation';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
-  isGlobal: true,
-  cache: true,
-}),
+      isGlobal: true,
+      cache: true,
+      validate: validateEnvironment,
+    }),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),
       serveRoot: '/uploads',
@@ -44,6 +53,13 @@ import { ConfigModule } from '@nestjs/config';
     CartModule,
     OrderModule,
     PaymentModule,
+    AddressesModule,
+    ShippingModule,
+    CouponsModule,
+    ReturnsModule,
+    RefundsModule,
+    InvoicesModule,
+    PostexModule,
     CmsModule,
   ],
 })

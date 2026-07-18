@@ -1,41 +1,43 @@
+import { ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 
-import { OrderService } from '../order/order.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { PostexService } from '../postex/postex.service';
-import { PaymentService } from './payment.service';
+import { PostexClient } from './postex.client';
+import { PostexService } from './postex.service';
 
-describe('PaymentService', () => {
-  let service: PaymentService;
+describe('PostexService', () => {
+  let service: PostexService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        PaymentService,
+        PostexService,
         {
           provide: PrismaService,
           useValue: {},
         },
         {
           provide: ConfigService,
-          useValue: { get: jest.fn(), getOrThrow: jest.fn() },
+          useValue: { get: jest.fn() },
         },
         {
-          provide: OrderService,
+          provide: PostexClient,
           useValue: {},
-        },
-        {
-          provide: PostexService,
-          useValue: { ensureShipmentForPaidOrder: jest.fn() },
         },
       ],
     }).compile();
 
-    service = module.get<PaymentService>(PaymentService);
+    service = module.get<PostexService>(PostexService);
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('rejects webhook calls when no secret is configured', async () => {
+    await expect(
+      service.handleWebhook({ shipmentId: 'PX-1' }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

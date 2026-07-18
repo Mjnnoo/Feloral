@@ -12,6 +12,7 @@ import axios from 'axios';
 import { OrderService } from '../order/order.service';
 import { toSafeGatewayAmount } from '../order/order.utils';
 import { PrismaService } from '../prisma/prisma.service';
+import { PostexService } from '../postex/postex.service';
 
 @Injectable()
 export class PaymentService {
@@ -19,6 +20,7 @@ export class PaymentService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly orderService: OrderService,
+    private readonly postexService: PostexService,
   ) {}
 
   async createPayment(orderId: number, userId: number) {
@@ -169,10 +171,12 @@ export class PaymentService {
       attempt.status === PaymentAttemptStatus.verified ||
       attempt.order.status === 'paid'
     ) {
+      const shipment = await this.tryCreatePostexShipment(attempt.orderId);
       return {
         success: true,
         alreadyPaid: true,
         refId: attempt.refId || attempt.order.paymentRefId,
+        shipment,
       };
     }
 
@@ -287,13 +291,28 @@ export class PaymentService {
       },
     });
 
+    const shipment = await this.tryCreatePostexShipment(orderId);
+
     return {
       success: true,
       alreadyPaid: finalized.alreadyPaid || code === 101,
       refId,
       cardPan,
       orderId,
+      shipment,
     };
+  }
+
+  private async tryCreatePostexShipment(orderId: number) {
+    try {
+      return await this.postexService.ensureShipmentForPaidOrder(orderId);
+    } catch (error) {
+      return {
+        created: false,
+        pendingRetry: true,
+        error: error instanceof Error ? error.message : 'POSTEX_SHIPMENT_FAILED',
+      };
+    }
   }
 
   private getPaymentTimeoutMs() {
