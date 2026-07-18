@@ -12,6 +12,7 @@ import * as bcrypt from 'bcrypt';
 import { createHash, randomUUID } from 'crypto';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { ADMIN_LOGIN_ROLES } from './constants/roles';
 import { RegisterDto } from './dto/register.dto';
 
 interface LoginMetadata {
@@ -24,13 +25,6 @@ interface RefreshTokenPayload {
   sessionId: string;
   tokenType: 'refresh';
 }
-const ADMIN_ROLES = [
-  'super_admin',
-  'admin',
-  'editor',
-  'seo',
-  'ai',
-] as const;
 @Injectable()
 export class AuthService {
   constructor(
@@ -90,9 +84,7 @@ export class AuthService {
         );
       }
 
-      throw new InternalServerErrorException(
-        'ثبت‌نام با خطا مواجه شد',
-      );
+      throw new InternalServerErrorException('ثبت‌نام با خطا مواجه شد');
     }
   }
 
@@ -109,45 +101,28 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException(
-        'شماره موبایل یا رمز عبور اشتباه است',
-      );
+      throw new UnauthorizedException('شماره موبایل یا رمز عبور اشتباه است');
     }
 
     if (!user.isActive) {
-      throw new UnauthorizedException(
-        'حساب کاربری غیرفعال است',
-      );
+      throw new UnauthorizedException('حساب کاربری غیرفعال است');
     }
 
-    const passwordMatches = await bcrypt.compare(
-      password,
-      user.password,
-    );
+    const passwordMatches = await bcrypt.compare(password, user.password);
 
     if (!passwordMatches) {
-      throw new UnauthorizedException(
-        'شماره موبایل یا رمز عبور اشتباه است',
-      );
+      throw new UnauthorizedException('شماره موبایل یا رمز عبور اشتباه است');
     }
 
-    const normalizedRole = user.role
-  .trim()
-  .toLowerCase();
+    const normalizedRole = user.role.trim().toLowerCase();
 
-if (
-  allowedRoles &&
-  !allowedRoles.includes(normalizedRole)
-) {
-  throw new ForbiddenException(
-    'اجازه ورود به پنل مدیریت را ندارید',
-  );
-}
+    if (allowedRoles && !allowedRoles.includes(normalizedRole)) {
+      throw new ForbiddenException('اجازه ورود به پنل مدیریت را ندارید');
+    }
 
     const sessionId = randomUUID();
 
-    const refreshTokenMaxAgeMs =
-      this.getRefreshTokenMaxAgeMs();
+    const refreshTokenMaxAgeMs = this.getRefreshTokenMaxAgeMs();
 
     const refreshToken = await this.createRefreshToken(
       user.id,
@@ -167,13 +142,9 @@ if (
         id: sessionId,
         userId: user.id,
         refreshTokenHash: this.hashToken(refreshToken),
-        userAgent:
-          metadata.userAgent?.slice(0, 500) ?? null,
-        ipAddress:
-          metadata.ipAddress?.slice(0, 100) ?? null,
-        expiresAt: new Date(
-          Date.now() + refreshTokenMaxAgeMs,
-        ),
+        userAgent: metadata.userAgent?.slice(0, 500) ?? null,
+        ipAddress: metadata.ipAddress?.slice(0, 100) ?? null,
+        expiresAt: new Date(Date.now() + refreshTokenMaxAgeMs),
       },
     });
 
@@ -190,52 +161,30 @@ if (
       },
     };
   }
-async adminLogin(
-  mobile: string,
-  password: string,
-  metadata: LoginMetadata,
-) {
-  return this.login(
-    mobile,
-    password,
-    metadata,
-    ADMIN_ROLES,
-  );
-}
+
+  async adminLogin(mobile: string, password: string, metadata: LoginMetadata) {
+    return this.login(mobile, password, metadata, ADMIN_LOGIN_ROLES);
+  }
   async refresh(refreshToken: string) {
     if (!refreshToken) {
-      throw new UnauthorizedException(
-        'نشست کاربری یافت نشد',
-      );
+      throw new UnauthorizedException('نشست کاربری یافت نشد');
     }
 
     let payload: RefreshTokenPayload;
 
     try {
-      payload =
-        await this.jwtService.verifyAsync<RefreshTokenPayload>(
-          refreshToken,
-          {
-            secret:
-              this.configService.getOrThrow<string>(
-                'JWT_REFRESH_SECRET',
-              ),
-          },
-        );
-    } catch {
-      throw new UnauthorizedException(
-        'نشست منقضی یا نامعتبر است',
+      payload = await this.jwtService.verifyAsync<RefreshTokenPayload>(
+        refreshToken,
+        {
+          secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
+        },
       );
+    } catch {
+      throw new UnauthorizedException('نشست منقضی یا نامعتبر است');
     }
 
-    if (
-      payload.tokenType !== 'refresh' ||
-      !payload.sub ||
-      !payload.sessionId
-    ) {
-      throw new UnauthorizedException(
-        'Refresh Token معتبر نیست',
-      );
+    if (payload.tokenType !== 'refresh' || !payload.sub || !payload.sessionId) {
+      throw new UnauthorizedException('Refresh Token معتبر نیست');
     }
 
     const session = await this.prisma.session.findUnique({
@@ -254,17 +203,12 @@ async adminLogin(
       session.expiresAt <= new Date() ||
       !session.user.isActive
     ) {
-      throw new UnauthorizedException(
-        'نشست منقضی یا غیرفعال است',
-      );
+      throw new UnauthorizedException('نشست منقضی یا غیرفعال است');
     }
 
-    const currentTokenHash =
-      this.hashToken(refreshToken);
+    const currentTokenHash = this.hashToken(refreshToken);
 
-    if (
-      session.refreshTokenHash !== currentTokenHash
-    ) {
+    if (session.refreshTokenHash !== currentTokenHash) {
       await this.prisma.session.updateMany({
         where: {
           id: session.id,
@@ -280,40 +224,33 @@ async adminLogin(
       );
     }
 
-    const refreshTokenMaxAgeMs =
-      this.getRefreshTokenMaxAgeMs();
+    const refreshTokenMaxAgeMs = this.getRefreshTokenMaxAgeMs();
 
-    const newRefreshToken =
-      await this.createRefreshToken(
-        session.user.id,
-        session.id,
-        refreshTokenMaxAgeMs,
-      );
+    const newRefreshToken = await this.createRefreshToken(
+      session.user.id,
+      session.id,
+      refreshTokenMaxAgeMs,
+    );
 
-    const newAccessToken =
-      await this.createAccessToken({
-        id: session.user.id,
-        mobile: session.user.mobile,
-        role: session.user.role,
-        sessionId: session.id,
-      });
+    const newAccessToken = await this.createAccessToken({
+      id: session.user.id,
+      mobile: session.user.mobile,
+      role: session.user.role.trim().toLowerCase(),
+      sessionId: session.id,
+    });
 
-    const updateResult =
-      await this.prisma.session.updateMany({
-        where: {
-          id: session.id,
-          refreshTokenHash: currentTokenHash,
-          revokedAt: null,
-        },
-        data: {
-          refreshTokenHash:
-            this.hashToken(newRefreshToken),
-          lastUsedAt: new Date(),
-          expiresAt: new Date(
-            Date.now() + refreshTokenMaxAgeMs,
-          ),
-        },
-      });
+    const updateResult = await this.prisma.session.updateMany({
+      where: {
+        id: session.id,
+        refreshTokenHash: currentTokenHash,
+        revokedAt: null,
+      },
+      data: {
+        refreshTokenHash: this.hashToken(newRefreshToken),
+        lastUsedAt: new Date(),
+        expiresAt: new Date(Date.now() + refreshTokenMaxAgeMs),
+      },
+    });
 
     if (updateResult.count !== 1) {
       throw new UnauthorizedException(
@@ -330,7 +267,7 @@ async adminLogin(
         fullName: session.user.fullName,
         mobile: session.user.mobile,
         email: session.user.email,
-        role: session.user.role,
+        role: session.user.role.trim().toLowerCase(),
       },
     };
   }
@@ -338,16 +275,12 @@ async adminLogin(
   async logout(refreshToken: string) {
     if (refreshToken) {
       try {
-        const payload =
-          await this.jwtService.verifyAsync<RefreshTokenPayload>(
-            refreshToken,
-            {
-              secret:
-                this.configService.getOrThrow<string>(
-                  'JWT_REFRESH_SECRET',
-                ),
-            },
-          );
+        const payload = await this.jwtService.verifyAsync<RefreshTokenPayload>(
+          refreshToken,
+          {
+            secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
+          },
+        );
 
         if (
           payload.tokenType === 'refresh' &&
@@ -404,10 +337,7 @@ async adminLogin(
         jti: randomUUID(),
       },
       {
-        secret:
-          this.configService.getOrThrow<string>(
-            'JWT_REFRESH_SECRET',
-          ),
+        secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
         expiresIn: Math.floor(maxAgeMs / 1000),
       },
     );
@@ -430,27 +360,20 @@ async adminLogin(
   }
 
   private getRefreshTokenMaxAgeMs(): number {
-    const lifetime =
-      this.configService.get<string>(
-        'JWT_REFRESH_EXPIRES_IN',
-        '30d',
-      );
+    const lifetime = this.configService.get<string>(
+      'JWT_REFRESH_EXPIRES_IN',
+      '30d',
+    );
 
     return this.parseDurationToMilliseconds(lifetime);
   }
 
   private hashToken(token: string): string {
-    return createHash('sha256')
-      .update(token)
-      .digest('hex');
+    return createHash('sha256').update(token).digest('hex');
   }
 
-  private parseDurationToMilliseconds(
-    duration: string,
-  ): number {
-    const match = /^(\d+)(s|m|h|d)$/.exec(
-      duration.trim(),
-    );
+  private parseDurationToMilliseconds(duration: string): number {
+    const match = /^(\d+)(s|m|h|d)$/.exec(duration.trim());
 
     if (!match) {
       throw new InternalServerErrorException(

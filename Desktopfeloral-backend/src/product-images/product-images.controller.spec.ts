@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+
 import { ProductImagesController } from './product-images.controller';
 import { ProductImagesService } from './product-images.service';
 
@@ -8,7 +9,12 @@ describe('ProductImagesController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ProductImagesController],
-      providers: [ProductImagesService],
+      providers: [
+        {
+          provide: ProductImagesService,
+          useValue: {},
+        },
+      ],
     }).compile();
 
     controller = module.get<ProductImagesController>(ProductImagesController);
