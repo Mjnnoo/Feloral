@@ -14,7 +14,7 @@ type Props = {
   type?: "text" | "image" | "section" | "theme";
 };
 
-function reactNodeToText(children: ReactNode) {
+function reactNodeToText(children: ReactNode): string {
   if (typeof children === "string" || typeof children === "number") {
     return String(children);
   }

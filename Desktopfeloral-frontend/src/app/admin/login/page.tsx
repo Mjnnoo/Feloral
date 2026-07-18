@@ -1,68 +1,260 @@
 ﻿"use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { getApiBaseUrl, hasAdminToken, setAdminSession } from "@/lib/cms-editor-access";
+import {
+  FormEvent,
+  useState,
+} from "react";
 
-function extractToken(payload: any): string {
-  return payload?.accessToken || payload?.access_token || payload?.token || payload?.jwt || payload?.data?.accessToken || payload?.data?.access_token || payload?.data?.token || "";
+import {
+  setAdminSession,
+} from "@/lib/cms-editor-access";
+
+const TEXT = {
+  title:
+    "\u0648\u0631\u0648\u062f \u0628\u0647 \u067e\u0646\u0644 \u0645\u062f\u06cc\u0631\u06cc\u062a",
+
+  description:
+    "\u0627\u06cc\u0646 \u0628\u062e\u0634 \u0641\u0642\u0637 \u0628\u0631\u0627\u06cc \u0645\u062f\u06cc\u0631\u0627\u0646 \u0645\u062c\u0627\u0632 \u0641\u0644\u0648\u0631\u0627\u0644 \u062f\u0631 \u062f\u0633\u062a\u0631\u0633 \u0627\u0633\u062a.",
+
+  mobileLabel:
+    "\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06cc\u0644 \u0645\u062f\u06cc\u0631",
+
+  passwordLabel:
+    "\u0631\u0645\u0632 \u0639\u0628\u0648\u0631",
+
+  loading:
+    "\u062f\u0631 \u062d\u0627\u0644 \u0628\u0631\u0631\u0633\u06cc...",
+
+  submit:
+    "\u0648\u0631\u0648\u062f \u0628\u0647 \u0645\u062f\u06cc\u0631\u06cc\u062a",
+
+  failed:
+    "\u0648\u0631\u0648\u062f \u0628\u0647 \u067e\u0646\u0644 \u0645\u062f\u06cc\u0631\u06cc\u062a \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062f.",
+
+  invalidResponse:
+    "\u0627\u0637\u0644\u0627\u0639\u0627\u062a \u0648\u0631\u0648\u062f \u0645\u062f\u06cc\u0631\u06cc\u062a \u062f\u0631\u06cc\u0627\u0641\u062a \u0646\u0634\u062f.",
+
+  genericError:
+    "\u062e\u0637\u0627 \u062f\u0631 \u0648\u0631\u0648\u062f \u0628\u0647 \u067e\u0646\u0644 \u0645\u062f\u06cc\u0631\u06cc\u062a.",
+};
+
+function safeDestination(
+  value: string | null,
+): string {
+  if (
+    value &&
+    value.startsWith("/") &&
+    !value.startsWith("//")
+  ) {
+    return value;
+  }
+
+  return "/admin";
+}
+
+function extractErrorMessage(
+  payload: unknown,
+): string {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "message" in payload
+  ) {
+    const message = (
+      payload as {
+        message?: unknown;
+      }
+    ).message;
+
+    if (typeof message === "string") {
+      return message;
+    }
+
+    if (Array.isArray(message)) {
+      return message.join("\u060c ");
+    }
+  }
+
+  return TEXT.failed;
 }
 
 export default function AdminLoginPage() {
-  const [mobile, setMobile] = useState("09121111111");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [mobile, setMobile] =
+    useState("");
 
-  useEffect(() => {
-    if (hasAdminToken()) {
-      const params = new URLSearchParams(window.location.search);
-      window.location.replace(params.get("next") || "/admin");
-    }
-  }, []);
+  const [password, setPassword] =
+    useState("");
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  const [busy, setBusy] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  async function submit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
+
     setBusy(true);
     setError("");
+
     try {
-      const response = await fetch(`${getApiBaseUrl()}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mobile, password }),
-      });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(payload?.message || "ÙˆØ±ÙˆØ¯ Ù†Ø§Ù…ÙˆÙÙ‚ Ø¨ÙˆØ¯.");
-      const token = extractToken(payload);
-      if (!token) throw new Error("ØªÙˆÚ©Ù† ÙˆØ±ÙˆØ¯ Ø§Ø² Ø¨Ú©â€ŒØ§Ù†Ø¯ Ø¯Ø±ÛŒØ§ÙØª Ù†Ø´Ø¯.");
-      setAdminSession(token);
-      const params = new URLSearchParams(window.location.search);
-      window.location.replace(params.get("next") || "/admin");
-    } catch (err: any) {
-      setError(err?.message || "Ø®Ø·Ø§ Ø¯Ø± ÙˆØ±ÙˆØ¯ Ø¨Ù‡ Ù¾Ù†Ù„ Ù…Ø¯ÛŒØ±ÛŒØª.");
+      const response = await fetch(
+        "/api/admin/login",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json; charset=utf-8",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            mobile,
+            password,
+          }),
+        },
+      );
+
+      const payload = await response
+        .json()
+        .catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          extractErrorMessage(payload),
+        );
+      }
+
+      const loginPayload = payload as {
+        access_token?: unknown;
+        user?: {
+          role?: unknown;
+        };
+      } | null;
+
+      const accessToken =
+        typeof loginPayload?.access_token ===
+        "string"
+          ? loginPayload.access_token
+          : "";
+
+      const role =
+        typeof loginPayload?.user?.role ===
+        "string"
+          ? loginPayload.user.role
+              .trim()
+              .toLowerCase()
+          : "";
+
+      if (!accessToken || !role) {
+        throw new Error(
+          TEXT.invalidResponse,
+        );
+      }
+
+      setAdminSession(accessToken);
+
+      const params =
+        new URLSearchParams(
+          window.location.search,
+        );
+
+      window.location.replace(
+        safeDestination(
+          params.get("next"),
+        ),
+      );
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : TEXT.genericError,
+      );
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <main className="min-h-screen bg-[#09090b] px-5 py-10 text-white">
-      <section className="mx-auto flex min-h-[80vh] w-full max-w-[460px] items-center justify-center">
-        <form onSubmit={submit} className="w-full rounded-[32px] border border-white/10 bg-white/[0.06] p-7 shadow-2xl backdrop-blur">
-          <div className="mb-8 text-center">
-            <p className="mb-2 text-xs font-bold uppercase tracking-[0.45em] text-amber-200/80">FELORAL ADMIN</p>
-            <h1 className="text-3xl font-black tracking-[-0.04em]">ÙˆØ±ÙˆØ¯ Ø¨Ù‡ Ù¾Ù†Ù„ Ù…Ø¯ÛŒØ±ÛŒØª</h1>
-            <p className="mt-3 text-sm leading-7 text-white/55">ØµÙØ­Ù‡ ÙˆÛŒØ±Ø§ÛŒØ´ Ø³Ø§ÛŒØª Ø§Ø² ØµÙØ­Ù‡ Ù…Ø´ØªØ±ÛŒ Ø¬Ø¯Ø§ Ø´Ø¯Ù‡ Ùˆ ÙÙ‚Ø· Ø¨Ø¹Ø¯ Ø§Ø² ÙˆØ±ÙˆØ¯ Ù…Ø¯ÛŒØ± ÙØ¹Ø§Ù„ Ù…ÛŒâ€ŒØ´ÙˆØ¯.</p>
-          </div>
-          <label className="mb-4 block">
-            <span className="mb-2 block text-sm font-bold text-white/75">Ù…ÙˆØ¨Ø§ÛŒÙ„ Ù…Ø¯ÛŒØ±</span>
-            <input value={mobile} onChange={(event) => setMobile(event.target.value)} dir="ltr" className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-left text-white outline-none transition focus:border-amber-200/70" placeholder="09121111111" autoComplete="username" />
+    <main
+      dir="rtl"
+      className="flex min-h-screen items-center justify-center bg-neutral-950 px-4 text-white"
+    >
+      <section className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur">
+        <p className="mb-3 text-xs tracking-[0.3em] text-amber-200">
+          FELORAL ADMIN
+        </p>
+
+        <h1 className="text-2xl font-bold">
+          {TEXT.title}
+        </h1>
+
+        <p className="mt-3 text-sm leading-7 text-white/60">
+          {TEXT.description}
+        </p>
+
+        <form
+          className="mt-8 space-y-5"
+          onSubmit={submit}
+        >
+          <label className="block">
+            <span className="mb-2 block text-sm text-white/75">
+              {TEXT.mobileLabel}
+            </span>
+
+            <input
+              dir="ltr"
+              inputMode="numeric"
+              autoComplete="username"
+              value={mobile}
+              onChange={(event) =>
+                setMobile(
+                  event.target.value,
+                )
+              }
+              className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-left outline-none transition focus:border-amber-200/70"
+              placeholder="09121111111"
+              required
+            />
           </label>
-          <label className="mb-6 block">
-            <span className="mb-2 block text-sm font-bold text-white/75">Ø±Ù…Ø² Ø¹Ø¨ÙˆØ±</span>
-            <input value={password} onChange={(event) => setPassword(event.target.value)} dir="ltr" type="password" className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-left text-white outline-none transition focus:border-amber-200/70" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" autoComplete="current-password" />
+
+          <label className="block">
+            <span className="mb-2 block text-sm text-white/75">
+              {TEXT.passwordLabel}
+            </span>
+
+            <input
+              dir="ltr"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) =>
+                setPassword(
+                  event.target.value,
+                )
+              }
+              className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-left outline-none transition focus:border-amber-200/70"
+              placeholder="********"
+              required
+            />
           </label>
-          {error ? <div className="mb-5 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm leading-7 text-red-100">{error}</div> : null}
-          <button disabled={busy} className="w-full rounded-2xl bg-amber-200 px-5 py-4 text-sm font-black text-black transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60">{busy ? "Ø¯Ø± Ø­Ø§Ù„ ÙˆØ±ÙˆØ¯..." : "ÙˆØ±ÙˆØ¯ Ø¨Ù‡ Ù…Ø¯ÛŒØ±ÛŒØª"}</button>
+
+          {error ? (
+            <div className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm leading-7 text-red-200">
+              {error}
+            </div>
+          ) : null}
+
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full rounded-2xl bg-amber-200 px-4 py-3 font-bold text-black transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {busy
+              ? TEXT.loading
+              : TEXT.submit}
+          </button>
         </form>
       </section>
     </main>

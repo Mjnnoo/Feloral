@@ -916,10 +916,16 @@ export function HeroFinalRuntime() {
       const cmsData = await fetchCmsData();
       if (stopped) return;
 
-      const textMap = cmsData.reduce((acc, item) => {
-        collectTextMap(item).forEach((value, key) => acc.set(key, value));
-        return acc;
-      }, new Map<string, string>());
+      const textMap = cmsData.reduce<Map<string, string>>(
+  (acc, item) => {
+    collectTextMap(item).forEach((value, key) => {
+      acc.set(key, value);
+    });
+
+    return acc;
+  },
+  new Map<string, string>(),
+);
 
       lastTargets = findHeroTextTargets(textMap);
 

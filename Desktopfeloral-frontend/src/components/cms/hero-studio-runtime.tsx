@@ -872,11 +872,18 @@ export function HeroStudioRuntime() {
       const cms = await fetchCmsData();
       if (stopped) return;
 
-      const textMap = cms.reduce((acc, item) => {
-        const map = collectTextMap(item);
-        map.forEach((value, key) => acc.set(key, value));
-        return acc;
-      }, new Map<string, string>());
+      const textMap = cms.reduce<Map<string, string>>(
+  (acc, item) => {
+    const map = collectTextMap(item);
+
+    map.forEach((value, key) => {
+      acc.set(key, value);
+    });
+
+    return acc;
+  },
+  new Map<string, string>(),
+);
 
       lastTargets = findHeroTextTargets(textMap);
 

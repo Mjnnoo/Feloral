@@ -3,10 +3,11 @@ import {
   Box,
   Gift,
   Headphones,
+  Play,
   ShieldCheck,
   Truck,
   UserRound,
-  UsersRound
+  UsersRound,
 } from "lucide-react";
 
 export const nav = [
@@ -78,4 +79,41 @@ export const products = [
     badge: "زنانه",
     image: "/products/burberry-blush.png"
   }
+];
+export const aiFeatures = [
+  {
+    title: "تست هوشمند محصولات",
+    desc: "انتخاب محصول متناسب با سلیقه و ویژگی‌های شما",
+    icon: BadgeCheck,
+  },
+  {
+    title: "پیشنهاد اختصاصی",
+    desc: "پیشنهاد محصولات بر اساس علایق و انتخاب‌های شما",
+    icon: Gift,
+  },
+  {
+    title: "مشاوره هوشمند",
+    desc: "راهنمایی سریع برای انتخاب بهترین محصول",
+    icon: UsersRound,
+  },
+];
+export const fragranceFilms = [
+  {
+    title: "رایحه‌های گرم و شرقی",
+    desc: "آشنایی تصویری با نت‌های گرم، ادویه‌ای و ماندگار",
+    icon: Play,
+    bg: "from-[#7c2d12] via-[#431407] to-[#1c1917]",
+  },
+  {
+    title: "رایحه‌های خنک و روزانه",
+    desc: "انتخاب عطرهای سبک و تازه برای استفاده روزمره",
+    icon: Play,
+    bg: "from-[#164e63] via-[#0e3a47] to-[#082f49]",
+  },
+  {
+    title: "رایحه‌های لوکس و خاص",
+    desc: "بررسی ترکیب نت‌های متفاوت برای موقعیت‌های ویژه",
+    icon: Play,
+    bg: "from-[#713f12] via-[#422006] to-[#1c1917]",
+  },
 ];

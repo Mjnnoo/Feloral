@@ -37,6 +37,13 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
-  ]
+  "node_modules",
+  "payload",
+  "_backup_before_header_restore",
+  "_feloral_backups",
+  "**/*backup*.ts",
+  "**/*backup*.tsx",
+  "**/*restore*.ts",
+  "**/*restore*.tsx"
+]
 }

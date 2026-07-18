@@ -1,34 +1,90 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+﻿import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
 
-const ADMIN_COOKIE_NAME = "feloral_admin";
+import {
+  ADMIN_SESSION_COOKIE,
+  verifyAdminSession,
+} from "./src/lib/admin-session";
 
-export function middleware(request: NextRequest) {
-  const { pathname, searchParams } = request.nextUrl;
-  const isAdminLogin = pathname === "/admin/login";
-  const isAdminRoute = pathname.startsWith("/admin");
-  const isEditorRoute = searchParams.get("editor") === "1" || searchParams.get("admin") === "1";
-  const isLoggedIn = request.cookies.get(ADMIN_COOKIE_NAME)?.value === "1";
-
-  if ((isAdminRoute && !isAdminLogin) || isEditorRoute) {
-    if (!isLoggedIn) {
-      const loginUrl = request.nextUrl.clone();
-      loginUrl.pathname = "/admin/login";
-      loginUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
-      return NextResponse.redirect(loginUrl);
-    }
+function safeNextPath(
+  value: string | null,
+): string {
+  if (
+    value &&
+    value.startsWith("/") &&
+    !value.startsWith("//")
+  ) {
+    return value;
   }
 
-  if (isAdminLogin && isLoggedIn) {
-    const next = searchParams.get("next") || "/admin";
-    const nextUrl = request.nextUrl.clone();
-    nextUrl.pathname = next.startsWith("/") ? next : "/admin";
-    nextUrl.search = "";
-    return NextResponse.redirect(nextUrl);
+  return "/admin";
+}
+
+export async function middleware(
+  request: NextRequest,
+) {
+  const { pathname, searchParams } =
+    request.nextUrl;
+
+  const isAdminLogin =
+    pathname === "/admin/login";
+
+  const isAdminRoute =
+    pathname.startsWith("/admin");
+
+  const isEditorRoute =
+    searchParams.get("editor") === "1" ||
+    searchParams.get("admin") === "1";
+
+  if (
+    !isAdminRoute &&
+    !isEditorRoute
+  ) {
+    return NextResponse.next();
+  }
+
+  const token = request.cookies.get(
+    ADMIN_SESSION_COOKIE,
+  )?.value;
+
+  const session =
+    await verifyAdminSession(token);
+
+  if (isAdminLogin) {
+    if (!session) {
+      return NextResponse.next();
+    }
+
+    const destination = safeNextPath(
+      searchParams.get("next"),
+    );
+
+    return NextResponse.redirect(
+      new URL(destination, request.url),
+    );
+  }
+
+  if (!session) {
+    const loginUrl = new URL(
+      "/admin/login",
+      request.url,
+    );
+
+    loginUrl.searchParams.set(
+      "next",
+      `${pathname}${request.nextUrl.search}`,
+    );
+
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"],
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)",
+  ],
 };
