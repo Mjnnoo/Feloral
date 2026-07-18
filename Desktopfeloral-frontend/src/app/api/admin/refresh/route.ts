@@ -1,4 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
 
 import {
   ADMIN_ACCESS_COOKIE,
@@ -11,38 +14,14 @@ import {
 export const runtime = "nodejs";
 
 const ACCESS_TOKEN_MAX_AGE = 15 * 60;
-const DEFAULT_REFRESH_MAX_AGE = 30 * 24 * 60 * 60;
+const DEFAULT_REFRESH_MAX_AGE =
+  30 * 24 * 60 * 60;
 
 function getApiBaseUrl(): string {
   return (
     process.env.NEXT_PUBLIC_API_BASE_URL ||
     "http://localhost:3000"
   ).replace(/\/$/, "");
-}
-
-function getErrorMessage(
-  payload: unknown,
-  fallback: string,
-): string {
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "message" in payload
-  ) {
-    const message = (
-      payload as { message?: unknown }
-    ).message;
-
-    if (typeof message === "string") {
-      return message;
-    }
-
-    if (Array.isArray(message)) {
-      return message.join("، ");
-    }
-  }
-
-  return fallback;
 }
 
 function extractRefreshToken(
@@ -72,69 +51,86 @@ function extractRefreshMaxAge(
 
   const maxAge = Number(match?.[1]);
 
-  return Number.isFinite(maxAge) && maxAge > 0
+  return Number.isFinite(maxAge) &&
+    maxAge > 0
     ? maxAge
     : DEFAULT_REFRESH_MAX_AGE;
+}
+
+function clearAdminCookies(
+  response: NextResponse,
+) {
+  const secure =
+    process.env.NODE_ENV === "production";
+
+  response.cookies.set({
+    name: ADMIN_ACCESS_COOKIE,
+    value: "",
+    httpOnly: true,
+    secure,
+    sameSite: "lax",
+    path: "/api/admin",
+    maxAge: 0,
+  });
+
+  response.cookies.set({
+    name: ADMIN_REFRESH_COOKIE,
+    value: "",
+    httpOnly: true,
+    secure,
+    sameSite: "lax",
+    path: "/api/admin",
+    maxAge: 0,
+  });
+
+  response.cookies.set({
+    name: ADMIN_SESSION_COOKIE,
+    value: "",
+    httpOnly: true,
+    secure,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  });
 }
 
 export async function POST(
   request: NextRequest,
 ) {
-  let credentials: {
-    mobile?: unknown;
-    password?: unknown;
-  };
+  const currentRefreshToken =
+    request.cookies.get(
+      ADMIN_REFRESH_COOKIE,
+    )?.value;
 
-  try {
-    credentials = await request.json();
-  } catch {
-    return NextResponse.json(
-      {
-        message: "اطلاعات ورود معتبر نیست.",
-      },
-      {
-        status: 400,
-      },
-    );
-  }
-
-  const mobile =
-    typeof credentials.mobile === "string"
-      ? credentials.mobile.trim()
-      : "";
-
-  const password =
-    typeof credentials.password === "string"
-      ? credentials.password
-      : "";
-
-  if (!mobile || !password) {
-    return NextResponse.json(
+  if (!currentRefreshToken) {
+    const response = NextResponse.json(
       {
         message:
-          "شماره موبایل و رمز عبور الزامی است.",
+          "نشست مدیریت یافت نشد.",
       },
       {
-        status: 400,
+        status: 401,
       },
     );
+
+    clearAdminCookies(response);
+
+    return response;
   }
 
   let backendResponse: Response;
 
   try {
     backendResponse = await fetch(
-      `${getApiBaseUrl()}/auth/admin/login`,
+      `${getApiBaseUrl()}/auth/refresh`,
       {
         method: "POST",
         headers: {
-          "Content-Type":
-            "application/json; charset=utf-8",
+          Cookie:
+            `refresh_token=${encodeURIComponent(
+              currentRefreshToken,
+            )}`,
         },
-        body: JSON.stringify({
-          mobile,
-          password,
-        }),
         cache: "no-store",
       },
     );
@@ -155,17 +151,19 @@ export async function POST(
     .catch(() => null);
 
   if (!backendResponse.ok) {
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
-        message: getErrorMessage(
-          payload,
-          "ورود به پنل مدیریت ناموفق بود.",
-        ),
+        message:
+          "نشست مدیریت منقضی یا نامعتبر است.",
       },
       {
-        status: backendResponse.status,
+        status: 401,
       },
     );
+
+    clearAdminCookies(response);
+
+    return response;
   }
 
   const accessToken =
@@ -200,36 +198,45 @@ export async function POST(
       : "";
 
   const backendSetCookie =
-    backendResponse.headers.get("set-cookie");
+    backendResponse.headers.get(
+      "set-cookie",
+    );
 
-  const refreshToken =
-    extractRefreshToken(backendSetCookie);
+  const newRefreshToken =
+    extractRefreshToken(
+      backendSetCookie,
+    );
 
   if (
     !accessToken ||
-    !refreshToken ||
+    !newRefreshToken ||
     !userId ||
     !ADMIN_ROLES.has(role)
   ) {
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         message:
-          "پاسخ احراز هویت مدیریت معتبر نیست.",
+          "پاسخ تمدید نشست معتبر نیست.",
       },
       {
         status: 502,
       },
     );
+
+    clearAdminCookies(response);
+
+    return response;
   }
 
-  const adminSession = await createAdminSession(
-    userId,
-    role,
-  );
+  const adminSession =
+    await createAdminSession(
+      userId,
+      role,
+    );
 
   const response = NextResponse.json({
-  user,
-});
+    user,
+  });
 
   const secure =
     process.env.NODE_ENV === "production";
@@ -256,7 +263,7 @@ export async function POST(
 
   response.cookies.set({
     name: ADMIN_REFRESH_COOKIE,
-    value: refreshToken,
+    value: newRefreshToken,
     httpOnly: true,
     secure,
     sameSite: "lax",

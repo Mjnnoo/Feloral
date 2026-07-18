@@ -1,6 +1,8 @@
 import { jwtVerify, SignJWT } from "jose";
 
 export const ADMIN_SESSION_COOKIE = "feloral_admin_session";
+export const ADMIN_ACCESS_COOKIE = "feloral_admin_access";
+export const ADMIN_REFRESH_COOKIE = "feloral_admin_refresh";
 
 export const ADMIN_ROLES = new Set([
   "super_admin",

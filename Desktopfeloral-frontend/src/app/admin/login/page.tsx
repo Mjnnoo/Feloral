@@ -5,9 +5,6 @@ import {
   useState,
 } from "react";
 
-import {
-  setAdminSession,
-} from "@/lib/cms-editor-access";
 
 const TEXT = {
   title:
@@ -127,33 +124,24 @@ export default function AdminLoginPage() {
       }
 
       const loginPayload = payload as {
-        access_token?: unknown;
-        user?: {
-          role?: unknown;
-        };
-      } | null;
+  user?: {
+    role?: unknown;
+  };
+} | null;
 
-      const accessToken =
-        typeof loginPayload?.access_token ===
-        "string"
-          ? loginPayload.access_token
-          : "";
+const role =
+  typeof loginPayload?.user?.role ===
+  "string"
+    ? loginPayload.user.role
+        .trim()
+        .toLowerCase()
+    : "";
 
-      const role =
-        typeof loginPayload?.user?.role ===
-        "string"
-          ? loginPayload.user.role
-              .trim()
-              .toLowerCase()
-          : "";
-
-      if (!accessToken || !role) {
-        throw new Error(
-          TEXT.invalidResponse,
-        );
-      }
-
-      setAdminSession(accessToken);
+if (!role) {
+  throw new Error(
+    TEXT.invalidResponse,
+  );
+}
 
       const params =
         new URLSearchParams(
