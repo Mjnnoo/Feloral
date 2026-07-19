@@ -20,64 +20,142 @@ export class PostexClient {
   cities(params: Record<string, unknown>) {
     return this.request(
       'GET',
-      this.path('POSTEX_CITIES_PATH', '/api/v1/cities'),
+      this.path(
+        'POSTEX_CITIES_PATH',
+        '/api/v1/locality/cities/to/all',
+      ),
       {
         params,
       },
     );
   }
 
+  provinces() {
+    return this.request(
+      'GET',
+      this.path(
+        'POSTEX_PROVINCES_PATH',
+        '/api/v1/locality/provinces',
+      ),
+    );
+  }
+
+  destinationCitiesByProvince(provinceCode: string) {
+    return this.request(
+      'GET',
+      this.templatedPath(
+        'POSTEX_CITIES_BY_PROVINCE_PATH',
+        '/api/v1/locality/cities/to/{provinceCode}',
+        provinceCode,
+        'provinceCode',
+      ),
+    );
+  }
+
   boxTypes() {
     return this.request(
       'GET',
-      this.path('POSTEX_BOX_TYPES_PATH', '/api/v1/box-types'),
+      this.path(
+        'POSTEX_BOX_TYPES_PATH',
+        '/api/v1/common/boxes',
+      ),
     );
   }
 
   quote(payload: unknown) {
     return this.request(
       'POST',
-      this.path('POSTEX_QUOTE_PATH', '/api/v1/shipping/quotes'),
-      { data: payload },
+      this.path(
+        'POSTEX_QUOTE_PATH',
+        '/api/v1/shipping/quotes',
+      ),
+      {
+        data: payload,
+      },
     );
   }
 
   createShipment(payload: unknown, idempotencyKey: string) {
     return this.request(
       'POST',
-      this.path('POSTEX_CREATE_SHIPMENT_PATH', '/api/v1/shipments'),
+      this.path(
+        'POSTEX_CREATE_SHIPMENT_PATH',
+        '/api/v1/parcels/bulk',
+      ),
       {
         data: payload,
-        headers: { 'Idempotency-Key': idempotencyKey },
+        headers: {
+          'Idempotency-Key': idempotencyKey,
+        },
       },
     );
   }
 
-  trackShipment(shipmentId: string) {
+  trackShipment(parcelNo: string) {
     return this.request(
       'GET',
       this.templatedPath(
         'POSTEX_TRACK_SHIPMENT_PATH',
-        '/api/v1/shipments/{shipmentId}/tracking',
-        shipmentId,
+        '/api/v1/tracking/events/{parcelNo}',
+        parcelNo,
+        'parcelNo',
       ),
     );
   }
 
-  cancelShipment(shipmentId: string, reason?: string) {
+  getParcel(parcelNo: string) {
+    return this.request(
+      'GET',
+      this.templatedPath(
+        'POSTEX_GET_PARCEL_PATH',
+        '/api/v1/parcels/{parcelNo}',
+        parcelNo,
+        'parcelNo',
+      ),
+    );
+  }
+
+  getParcelByOrderNo(orderNo: string) {
+    return this.request(
+      'GET',
+      this.templatedPath(
+        'POSTEX_GET_PARCEL_BY_ORDER_PATH',
+        '/api/v1/parcels/custom-order-no/{orderNo}',
+        orderNo,
+        'orderNo',
+      ),
+    );
+  }
+
+  walletBalance() {
+    return this.request(
+      'GET',
+      this.path(
+        'POSTEX_WALLET_BALANCE_PATH',
+        '/api/v1/wallet/balance',
+      ),
+    );
+  }
+
+  cancelShipment(parcelNo: string, reason?: string) {
     return this.request(
       'POST',
       this.templatedPath(
         'POSTEX_CANCEL_SHIPMENT_PATH',
-        '/api/v1/shipments/{shipmentId}/cancel',
-        shipmentId,
+        '/api/v1/parcels/cancel-request/{parcelNo}',
+        parcelNo,
+        'parcelNo',
       ),
-      { data: { reason } },
+      {
+        data: {
+          reason,
+        },
+      },
     );
   }
 
   async testConnection() {
-    return this.cities({ page: 1, limit: 1 });
+    return this.provinces();
   }
 
   private async request(
@@ -102,6 +180,7 @@ export class PostexClient {
           ...options.headers,
         },
       });
+
       return response.data;
     } catch (error) {
       if (
@@ -119,148 +198,92 @@ export class PostexClient {
   }
 
   private async authHeaders(): Promise<Record<string, string>> {
-    const staticToken = this.configService
-      .get<string>('POSTEX_API_TOKEN')
+    const apiKey = this.configService
+      .get<string>('POSTEX_API_KEY')
       ?.trim();
-    const apiKey = this.configService.get<string>('POSTEX_API_KEY')?.trim();
+
     const headers: Record<string, string> = {};
 
-    if (staticToken) {
-      const header = this.configService.get<string>(
-        'POSTEX_TOKEN_HEADER',
-        'Authorization',
-      );
-      const scheme = this.configService.get<string>(
-        'POSTEX_AUTH_SCHEME',
-        'Bearer',
-      );
-      headers[header] =
-        header.toLowerCase() === 'authorization'
-          ? `${scheme} ${staticToken}`.trim()
-          : staticToken;
-    } else if (this.canAcquireToken()) {
-      const token = await this.acquireToken();
-      const header = this.configService.get<string>(
-        'POSTEX_TOKEN_HEADER',
-        'Authorization',
-      );
-      const scheme = this.configService.get<string>(
-        'POSTEX_AUTH_SCHEME',
-        'Bearer',
-      );
-      headers[header] =
-        header.toLowerCase() === 'authorization'
-          ? `${scheme} ${token}`.trim()
-          : token;
-    }
-
     if (apiKey) {
-      const apiKeyHeader = this.configService.get<string>(
+      const header = this.configService.get<string>(
         'POSTEX_API_KEY_HEADER',
-        'X-API-Key',
+        'x-api-key',
       );
-      headers[apiKeyHeader] = apiKey;
+
+      headers[header] = apiKey;
     }
 
     return headers;
   }
 
-  private async acquireToken(): Promise<string> {
-    if (this.tokenCache && this.tokenCache.expiresAt > Date.now() + 30_000) {
-      return this.tokenCache.value;
-    }
-
-    const username = this.configService.get<string>('POSTEX_USERNAME')?.trim();
-    const password = this.configService.get<string>('POSTEX_PASSWORD')?.trim();
-    if (!username || !password) {
-      throw new ServiceUnavailableException(
-        'اطلاعات ورود Postex تنظیم نشده است',
-      );
-    }
-
-    try {
-      const response = await axios.post(
-        `${this.baseUrl()}${this.path('POSTEX_AUTH_PATH', '/api/v1/auth/token')}`,
-        { username, password },
-        {
-          timeout: this.timeoutMs(),
-          headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-          },
-        },
-      );
-
-      const data = response.data || {};
-      const token = String(
-        data.token ||
-          data.accessToken ||
-          data.access_token ||
-          data.data?.token ||
-          data.data?.accessToken ||
-          data.data?.access_token ||
-          '',
-      ).trim();
-
-      if (!token) {
-        throw new Error('پاسخ احراز هویت Postex فاقد توکن است');
-      }
-
-      const expiresIn = Number(
-        data.expiresIn || data.expires_in || data.data?.expiresIn || 3600,
-      );
-      this.tokenCache = {
-        value: token,
-        expiresAt: Date.now() + Math.max(60, expiresIn) * 1000,
-      };
-      return token;
-    } catch (error) {
-      throw new BadGatewayException(this.extractError(error));
-    }
-  }
-
   private assertEnabled() {
-    const enabled = this.configService.get<string>('POSTEX_ENABLED', 'false');
+    const enabled = this.configService.get<string>(
+      'POSTEX_ENABLED',
+      'false',
+    );
+
     if (!['true', '1', 'yes'].includes(String(enabled).toLowerCase())) {
-      throw new ServiceUnavailableException('اتصال Postex غیرفعال است');
+      throw new ServiceUnavailableException(
+        'اتصال Postex غیرفعال است',
+      );
     }
   }
 
   private canAcquireToken() {
-    return Boolean(
-      this.configService.get<string>('POSTEX_USERNAME')?.trim() &&
-      this.configService.get<string>('POSTEX_PASSWORD')?.trim(),
-    );
+    return false;
   }
 
   private baseUrl() {
     return this.configService
-      .get<string>('POSTEX_BASE_URL', 'https://api.postex.ir')
+      .get<string>(
+        'POSTEX_BASE_URL',
+        'https://api.postex.ir',
+      )
       .replace(/\/+$/, '');
   }
 
   private path(key: string, fallback: string) {
-    const value = this.configService.get<string>(key, fallback).trim();
+    const value = this.configService
+      .get<string>(key, fallback)
+      .trim();
+
     if (/^https?:\/\//i.test(value)) {
-      throw new ServiceUnavailableException(`${key} باید فقط مسیر API باشد`);
+      throw new ServiceUnavailableException(
+        `${key} باید فقط مسیر API باشد`,
+      );
     }
-    return value.startsWith('/') ? value : `/${value}`;
+
+    return value.startsWith('/')
+      ? value
+      : `/${value}`;
   }
 
-  private templatedPath(key: string, fallback: string, shipmentId: string) {
+  private templatedPath(
+    key: string,
+    fallback: string,
+    value: string,
+    placeholder: string,
+  ) {
     const path = this.path(key, fallback);
-    return path.replace('{shipmentId}', encodeURIComponent(shipmentId));
+
+    return path.replace(
+      `{${placeholder}}`,
+      encodeURIComponent(value),
+    );
   }
 
   private timeoutMs() {
     const configured = Number(
-      this.configService.get<string | number>('POSTEX_HTTP_TIMEOUT_MS'),
+      this.configService.get<string | number>(
+        'POSTEX_HTTP_TIMEOUT_MS',
+      ),
     );
+
     return Number.isInteger(configured) &&
       configured >= 3000 &&
-      configured <= 60_000
+      configured <= 60000
       ? configured
-      : 15_000;
+      : 15000;
   }
 
   private extractError(error: unknown) {
@@ -268,7 +291,6 @@ export class PostexClient {
       return (
         error.response?.data?.message ||
         error.response?.data?.error ||
-        error.response?.data?.errors?.message ||
         error.message ||
         'ارتباط با Postex ناموفق بود'
       );
@@ -278,4 +300,5 @@ export class PostexClient {
       ? error.message
       : 'ارتباط با Postex ناموفق بود';
   }
+  
 }

@@ -50,14 +50,24 @@ export class PostexService {
   ) {}
 
   async searchCities(search?: string, province?: string) {
-    const response = await this.client.cities({
+  let response;
+
+  if (province) {
+    response = await this.client.destinationCitiesByProvince(
+      province,
+    );
+  } else {
+    response = await this.client.cities({
       search,
       q: search,
-      province,
     });
-
-    return { items: this.extractCollection(response), raw: response };
   }
+
+  return {
+    items: this.extractCollection(response),
+    raw: response,
+  };
+}
 
   async boxTypes() {
     const response = await this.client.boxTypes();
@@ -124,146 +134,320 @@ export class PostexService {
   }
 
   async quote(userId: number, dto: PostexQuoteDto) {
-    const [cart, address, origin] = await Promise.all([
-      this.prisma.cart.findUnique({
-        where: { userId },
-        include: {
-          items: {
-            orderBy: { id: 'asc' },
-            include: { variant: { include: { product: true } } },
+  const [cart, address, origin] = await Promise.all([
+    this.prisma.cart.findUnique({
+      where: { userId },
+      include: {
+        items: {
+          orderBy: { id: 'asc' },
+          include: {
+            variant: {
+              include: {
+                product: true,
+              },
+            },
           },
         },
-      }),
-      (this.prisma as any).address.findFirst({
-        where: { id: dto.addressId, userId, isActive: true },
-      }),
-      (this.prisma as any).shippingOrigin.findFirst({
-        where: { isActive: true },
-        orderBy: { updatedAt: 'desc' },
-      }),
-    ]);
+      },
+    }),
 
-    if (!cart || cart.items.length === 0) {
-      throw new BadRequestException('سبد خرید خالی است');
-    }
-    if (!address) throw new NotFoundException('آدرس مقصد پیدا نشد');
-    if (!origin)
-      throw new ServiceUnavailableException('مبدا فعال فروشگاه تنظیم نشده است');
-    if (!address.postexCityId) {
+    (this.prisma as any).address.findFirst({
+      where: {
+        id: dto.addressId,
+        userId,
+        isActive: true,
+      },
+    }),
+
+    (this.prisma as any).shippingOrigin.findFirst({
+      where: {
+        isActive: true,
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+    }),
+  ]);
+
+
+  if (!cart || cart.items.length === 0) {
+    throw new BadRequestException('سبد خرید خالی است');
+  }
+
+  if (!address) {
+    throw new NotFoundException('آدرس مقصد پیدا نشد');
+  }
+
+  if (!origin) {
+    throw new ServiceUnavailableException(
+      'مبدا فعال فروشگاه تنظیم نشده است',
+    );
+  }
+
+
+  if (!address.postexCityId) {
+    throw new BadRequestException(
+      'شناسه شهر Postex برای آدرس مقصد ثبت نشده است',
+    );
+  }
+
+  if (!origin.postexCityId) {
+    throw new BadRequestException(
+      'شناسه شهر Postex برای مبدا ثبت نشده است',
+    );
+  }
+
+
+  let subtotal = new Prisma.Decimal(0);
+
+  for (const item of cart.items) {
+    if (
+      !item.variant.isActive ||
+      !item.variant.product.isActive
+    ) {
       throw new BadRequestException(
-        'شناسه شهر Postex برای آدرس مقصد ثبت نشده است',
+        'سبد خرید شامل کالای غیرفعال است',
       );
     }
-    if (!origin.postexCityId) {
-      throw new BadRequestException('شناسه شهر Postex برای مبدا ثبت نشده است');
-    }
 
-    let subtotal = new Prisma.Decimal(0);
-    for (const item of cart.items) {
-      if (!item.variant.isActive || !item.variant.product.isActive) {
-        throw new BadRequestException('سبد خرید شامل کالای غیرفعال است');
-      }
-      subtotal = subtotal.plus(effectivePrice(item.variant).mul(item.quantity));
-    }
+    subtotal = subtotal.plus(
+      effectivePrice(item.variant).mul(item.quantity),
+    );
+  }
 
-    const parcel = summarizeParcel(cart.items);
-    const fingerprint = buildCartFingerprint(
-      cart.items.map((item) => ({
-        variantId: item.variantId,
-        quantity: item.quantity,
-        price: effectivePrice(item.variant),
-      })),
-    );
-    const requestPayload = this.buildQuotePayload(
-      userId,
-      origin,
-      address,
-      cart.items,
-      parcel,
-      subtotal,
-      dto,
-    );
+
+  const parcel = summarizeParcel(cart.items);
+
+
+  const fingerprint = buildCartFingerprint(
+    cart.items.map((item) => ({
+      variantId: item.variantId,
+      quantity: item.quantity,
+      price: effectivePrice(item.variant),
+    })),
+  );
+
+
+  const requestPayload = this.buildQuotePayload(
+    userId,
+    origin,
+    address,
+    cart.items,
+    parcel,
+    subtotal,
+    dto,
+  );
+
+
     const response = await this.client.quote(requestPayload);
-    const options = normalizeQuoteOptions(response);
 
-    if (options.length === 0) {
-      throw new BadRequestException(
-        'Postex هیچ سرویس قابل استفاده‌ای برنگرداند',
-      );
-    }
 
-    const expiresAt = new Date(Date.now() + this.quoteTtlMinutes() * 60_000);
-    const internalExtraCost = this.internalExtraCost();
-    const markupPercent = this.markupPercent();
-    const freeShippingAbove = this.freeShippingAbove();
-    const created = await this.prisma.$transaction(async (typedTx) => {
+  
+  const options = normalizeQuoteOptions(response);
+
+
+  
+  if (options.length === 0) {
+    throw new BadRequestException(
+      'Postex هیچ سرویس قابل استفاده‌ای برنگرداند',
+    );
+  }
+
+
+  const expiresAt = new Date(
+    Date.now() + this.quoteTtlMinutes() * 60_000,
+  );
+
+
+  const internalExtraCost = this.internalExtraCost();
+
+  const markupPercent = this.markupPercent();
+
+  const freeShippingAbove = this.freeShippingAbove();
+
+
+
+  const created = await this.prisma.$transaction(
+    async (typedTx) => {
+
       const tx = typedTx as any;
+
+
       await tx.postexQuote.updateMany({
-        where: { userId, consumedAt: null, expiresAt: { lte: new Date() } },
-        data: { invalidatedAt: new Date() },
+        where: {
+          userId,
+          consumedAt: null,
+          expiresAt: {
+            lte: new Date(),
+          },
+        },
+        data: {
+          invalidatedAt: new Date(),
+        },
       });
 
-      const rows: any[] = [];
+
+      const rows = [];
+
+
       for (const option of options) {
-        const providerPrice = new Prisma.Decimal(option.providerPrice);
-        const percentageMarkup = Math.round(
-          (providerPrice.toNumber() * markupPercent) / 100,
-        );
-        const markup = new Prisma.Decimal(percentageMarkup).plus(
-          internalExtraCost,
-        );
+
+        const providerPrice =
+          new Prisma.Decimal(option.providerPrice);
+
+
+        const percentageMarkup =
+          Math.round(
+            (providerPrice.toNumber() *
+              markupPercent) /
+              100,
+          );
+
+
+        const markup =
+          new Prisma.Decimal(
+            percentageMarkup,
+          ).plus(
+            internalExtraCost,
+          );
+
+
         const customerPrice =
-          freeShippingAbove && !subtotal.lessThan(freeShippingAbove)
+          freeShippingAbove &&
+          !subtotal.lessThan(freeShippingAbove)
             ? new Prisma.Decimal(0)
             : providerPrice.plus(markup);
 
-        rows.push(
-          await tx.postexQuote.create({
-            data: {
-              userId,
-              addressId: address.id,
-              originId: origin.id,
-              serviceCode: option.serviceCode,
-              courierCode: option.courierCode,
-              serviceName: option.serviceName,
-              serviceType: option.serviceType,
-              providerPrice,
-              internalExtraCost: markup,
-              customerPrice,
-              estimatedDelivery: option.estimatedDelivery,
-              boxTypeId: option.boxTypeId ?? dto.boxTypeId,
-              packageCode: option.packageCode ?? dto.packageCode,
-              packageTitle: option.packageTitle ?? dto.packageTitle,
-              paymentType: dto.paymentType || 'prepaid',
-              pickupType: dto.pickupType || 'pickup',
-              insured: dto.insured ?? true,
-              smsNotification: dto.smsNotification ?? true,
-              packaging: dto.packaging ?? false,
-              subtotalSnapshot: subtotal,
-              totalWeightGram: parcel.totalWeightGram,
-              lengthCm: parcel.lengthCm,
-              widthCm: parcel.widthCm,
-              heightCm: parcel.heightCm,
-              cartFingerprint: fingerprint,
-              requestSnapshot: this.asJson(requestPayload),
-              responseSnapshot: this.asJson(option.raw),
-              expiresAt,
-            },
-          }),
-        );
+
+
+        const row = await tx.postexQuote.create({
+          data: {
+
+            userId,
+
+            addressId: address.id,
+
+            originId: origin.id,
+
+
+            serviceCode:
+              option.serviceCode,
+
+            courierCode:
+              option.courierCode,
+
+            serviceName:
+              option.serviceName,
+
+            serviceType:
+              option.serviceType,
+
+
+            providerPrice,
+
+            internalExtraCost,
+
+            customerPrice,
+
+
+            estimatedDelivery:
+              option.estimatedDelivery,
+
+
+            boxTypeId:
+              option.boxTypeId ?? dto.boxTypeId,
+
+
+            packageCode:
+              option.packageCode ?? dto.packageCode,
+
+
+            packageTitle:
+              option.packageTitle ?? dto.packageTitle,
+
+
+            paymentType:
+              dto.paymentType || 'prepaid',
+
+
+            pickupType:
+              dto.pickupType || 'pickup',
+
+
+            insured:
+              dto.insured ?? true,
+
+
+            smsNotification:
+              dto.smsNotification ?? true,
+
+
+            packaging:
+              dto.packaging ?? false,
+
+
+            subtotalSnapshot:
+              subtotal,
+
+
+            totalWeightGram:
+              parcel.totalWeightGram,
+
+
+            lengthCm:
+              parcel.lengthCm,
+
+
+            widthCm:
+              parcel.widthCm,
+
+
+            heightCm:
+              parcel.heightCm,
+
+
+            cartFingerprint:
+              fingerprint,
+
+
+            requestSnapshot:
+              this.asJson(requestPayload),
+
+
+            responseSnapshot:
+              this.asJson(option.raw),
+
+
+            expiresAt,
+
+          },
+        });
+
+
+        rows.push(row);
       }
+
+
       return rows;
-    });
 
-    return {
-      expiresAt,
-      subtotal,
-      parcel,
-      options: created.map((row: any) => this.safeQuote(row)),
-      raw: response,
-    };
-  }
+    },
+  );
 
+
+  
+  return {
+    expiresAt,
+    subtotal,
+    parcel,
+
+    options:
+      created.map((row: any) =>
+        this.safeQuote(row),
+      ),
+
+    raw: response,
+  };
+}
   async resolveQuoteForCheckout(
     tx: any,
     userId: number,
@@ -606,107 +790,208 @@ export class PostexService {
   }
 
   private buildQuotePayload(
-    userId: number,
-    origin: any,
-    address: any,
-    items: any[],
-    parcel: ReturnType<typeof summarizeParcel>,
-    subtotal: Prisma.Decimal,
-    dto: PostexQuoteDto,
-  ) {
-    return {
-      reference: `feloral-quote-${userId}-${Date.now()}`,
-      source: this.originPayload(origin),
-      destination: this.destinationPayload(address),
-      parcel: {
-        weightGram: parcel.totalWeightGram,
-        lengthCm: parcel.lengthCm,
-        widthCm: parcel.widthCm,
-        heightCm: parcel.heightCm,
-        itemCount: parcel.itemCount,
-        boxTypeId: dto.boxTypeId,
-        packageTitle: dto.packageTitle || 'Feloral order',
-        packageCode: dto.packageCode,
-        declaredValue: subtotal.toNumber(),
-        fragile: items.some((item) => item.variant.isFragile),
-        liquid: items.some((item) => item.variant.isLiquid),
-        items: items.map((item) => ({
-          sku: item.variant.sku,
-          title: item.variant.product.name,
-          quantity: item.quantity,
-          weightGram: item.variant.weightGram,
-          lengthCm: item.variant.lengthCm,
-          widthCm: item.variant.widthCm,
-          heightCm: item.variant.heightCm,
-          value: effectivePrice(item.variant).toNumber(),
-        })),
+  userId: number,
+  origin: any,
+  address: any,
+  items: any[],
+  parcel: ReturnType<typeof summarizeParcel>,
+  subtotal: Prisma.Decimal,
+  dto: PostexQuoteDto,
+) {
+  return {
+  collection_type: 'pick_up',
+
+  courier: {
+  courier_code: dto.courierCode || 'IR_POST',
+  service_type: 'EXPRESS',
+},
+
+  from_city_code: origin.postexCityId,
+
+  parcels: [
+      {
+        custom_parcel_id: `feloral-quote-${userId}-${Date.now()}`,
+
+        to_city_code: address.postexCityId,
+
+        payment_type: 'SENDER',
+
+        parcel_properties: {
+          length: parcel.lengthCm,
+          width: parcel.widthCm,
+          height: parcel.heightCm,
+
+          total_weight: parcel.totalWeightGram,
+
+          is_fragile: items.some(
+            (item) => item.variant.isFragile,
+          ),
+
+          is_liquid: items.some(
+            (item) => item.variant.isLiquid,
+          ),
+
+          total_value: subtotal.toNumber(),
+
+          pre_paid_amount: 0,
+
+          total_value_currency: 'IRR',
+
+          box_type_id: dto.boxTypeId || 0,
+        },
       },
-      options: {
-        courierCode: dto.courierCode,
-        paymentType: dto.paymentType || 'prepaid',
-        pickupType: dto.pickupType || 'pickup',
-        insured: dto.insured ?? true,
-        smsNotification: dto.smsNotification ?? true,
-        packaging: dto.packaging ?? false,
-      },
-    };
-  }
+    ],
+
+    value_added_service: {
+      request_label: false,
+      request_packaging: dto.packaging ?? false,
+      request_sms_notification:
+        dto.smsNotification ?? false,
+    },
+  };
+}
 
   private buildShipmentPayload(order: any) {
-    const quote = order.postexQuote;
-    const origin = quote.origin;
-    return {
-      reference: `feloral-order-${order.id}`,
-      source: this.originPayload(origin),
-      destination: {
-        cityId: order.postexCityId,
-        province: order.shippingProvince,
-        city: order.shippingCity,
-        address: order.shippingAddressLine,
-        postalCode: order.shippingPostalCode,
-        plaque: order.shippingPlaque,
-        unit: order.shippingUnit,
-        receiverName: order.shippingReceiverName,
-        receiverMobile: order.shippingReceiverMobile,
+  const quote = order.postexQuote;
+
+  return {
+    collection_type: 'pick_up',
+
+    custom_batch_no: `feloral-${order.id}`,
+
+    custom_channel: 'api',
+
+    parcels: [
+      {
+        from: {
+          contact: {
+            first_name: 'Feloral',
+            last_name: 'Store',
+            mobile_no:
+              quote.origin.senderMobile,
+          },
+
+          location: {
+            post_code:
+              quote.origin.postalCode,
+
+            country: 'IR',
+
+            city_id:
+              quote.origin.postexCityId,
+
+            city_name:
+              quote.origin.city,
+
+            address:
+              quote.origin.addressLine,
+          },
+        },
+
+        to: {
+          contact: {
+            first_name:
+              order.shippingReceiverName,
+
+            last_name: '',
+
+            mobile_no:
+              order.shippingReceiverMobile,
+          },
+
+          location: {
+            post_code:
+              order.shippingPostalCode,
+
+            country: 'IR',
+
+            city_id:
+              order.postexCityId,
+
+            city_name:
+              order.shippingCity,
+
+            address:
+              order.shippingAddressLine,
+          },
+        },
+
+
+        parcel_items: order.items.map(
+          (item: any) => ({
+            description:
+              item.productName,
+
+            product_id:
+              item.productId,
+
+            quantity:
+              item.quantity,
+
+            sku:
+              item.sku,
+
+            price:
+              Number(item.price),
+
+            weight:
+              item.weight || 0,
+          }),
+        ),
+
+
+        parcel_properties: {
+          length:
+            quote.lengthCm,
+
+          width:
+            quote.widthCm,
+
+          height:
+            quote.heightCm,
+
+          total_weight:
+            quote.totalWeightGram,
+
+          is_fragile:
+            true,
+
+          is_liquid:
+            false,
+
+          total_value:
+            Number(order.subtotal),
+
+          pre_paid_amount:
+            0,
+
+          total_value_currency:
+            'IRR',
+
+          box_type_id:
+            quote.boxTypeId || 0,
+        },
+
+
+        custom_order_no:
+          `feloral-order-${order.id}`,
+
+        ready_to_accept:
+          true,
+
+
+        added_service: {
+          request_label: false,
+          request_packaging:
+            quote.packaging ?? false,
+
+          request_sms_notification:
+            quote.smsNotification ?? false,
+        },
       },
-      parcel: {
-        weightGram: quote.totalWeightGram,
-        lengthCm: quote.lengthCm,
-        widthCm: quote.widthCm,
-        heightCm: quote.heightCm,
-        boxTypeId: quote.boxTypeId,
-        packageTitle: quote.packageTitle || `Feloral order #${order.id}`,
-        packageCode: quote.packageCode,
-        declaredValue: Number(order.subtotal),
-        items: order.items.map((item: any) => ({
-          sku: item.sku,
-          title: item.productName,
-          variantTitle: item.variantTitle,
-          quantity: item.quantity,
-          unitPrice: Number(item.price),
-          total: Number(item.total),
-        })),
-      },
-      service: {
-        code: quote.serviceCode,
-        courierCode: quote.courierCode,
-        name: quote.serviceName,
-        type: quote.serviceType,
-        providerPrice: Number(quote.providerPrice),
-      },
-      options: {
-        paymentType: quote.paymentType,
-        pickupType: quote.pickupType,
-        insured: quote.insured,
-        smsNotification: quote.smsNotification,
-        packaging: quote.packaging,
-      },
-      payment: {
-        orderPaid: true,
-        shippingChargeToCustomer: Number(order.shippingCost),
-      },
-    };
-  }
+    ],
+  };
+}
 
   private originPayload(origin: any) {
     return {

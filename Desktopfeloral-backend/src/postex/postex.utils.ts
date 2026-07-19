@@ -88,82 +88,55 @@ const findFirstArray = (value: unknown, depth = 0): unknown[] | undefined => {
   return undefined;
 };
 
-export function normalizeQuoteOptions(response: unknown): PostexQuoteOption[] {
-  const rows = findFirstArray(response) || [];
+export function normalizeQuoteOptions(response: any) {
+  const options: any[] = [];
 
-  return rows
-    .map((row, index): PostexQuoteOption | undefined => {
-      const providerPrice = pickNumber(row, [
-        'finalPrice',
-        'totalPrice',
-        'shippingPrice',
-        'shippingCost',
-        'price',
-        'amount',
-        'cost',
-        'total',
-      ]);
+  const shippingPrices =
+    response?.shipping_prices ?? [];
 
-      if (providerPrice === undefined || providerPrice < 0) return undefined;
+  for (const shipping of shippingPrices) {
+    const services =
+      shipping?.service_price ?? [];
 
-      const serviceCode =
-        pickString(row, [
-          'serviceCode',
-          'service_code',
-          'courierServiceCode',
-          'serviceId',
-          'service_id',
-          'code',
-          'id',
-        ]) || `service-${index + 1}`;
+    for (const service of services) {
+      options.push({
+        serviceCode:
+          service.serviceType ??
+          service.courierCode ??
+          'UNKNOWN',
 
-      return {
-        serviceCode,
-        courierCode: pickString(row, [
-          'courierCode',
-          'courier_code',
-          'courier',
-          'providerCode',
-          'companyCode',
-        ]),
+        courierCode:
+          service.courierCode ?? null,
+
         serviceName:
-          pickString(row, [
-            'serviceName',
-            'service_name',
-            'courierName',
-            'title',
-            'name',
-          ]) || serviceCode,
-        serviceType: pickString(row, [
-          'serviceType',
-          'service_type',
-          'type',
-          'deliveryType',
-        ]),
-        providerPrice: Math.round(providerPrice),
-        estimatedDelivery: pickString(row, [
-          'estimatedDelivery',
-          'estimated_delivery',
-          'deliveryTime',
-          'delivery_time',
-          'eta',
-          'duration',
-        ]),
-        boxTypeId: pickNumber(row, ['boxTypeId', 'box_type_id', 'boxId']),
-        packageCode: pickString(row, [
-          'packageCode',
-          'package_code',
-          'parcelCode',
-        ]),
-        packageTitle: pickString(row, [
-          'packageTitle',
-          'package_title',
-          'parcelTitle',
-        ]),
-        raw: row,
-      };
-    })
-    .filter((item): item is PostexQuoteOption => Boolean(item));
+          service.serviceName ??
+          service.courierName ??
+          'Postex',
+
+        serviceType:
+          service.serviceType ?? null,
+
+        providerPrice:
+          service.totalPrice ??
+          shipping.shipping_price ??
+          0,
+
+        finalPrice:
+          service.totalPrice ??
+          shipping.shipping_price ??
+          0,
+
+        estimatedDelivery:
+          service.slaDays ??
+          shipping.estimated_delivery ??
+          null,
+
+        raw: service,
+      });
+    }
+  }
+
+  return options;
 }
 
 export function buildCartFingerprint(
