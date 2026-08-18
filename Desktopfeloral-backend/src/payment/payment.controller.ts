@@ -6,6 +6,7 @@ import type { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { RequestPaymentDto } from './dto/request-payment.dto';
 import { VerifyPaymentDto } from './dto/verify-payment.dto';
 import { PaymentService } from './payment.service';
+import {Param,ParseIntPipe,} from '@nestjs/common';
 
 @Controller('payment')
 export class PaymentController {
@@ -42,4 +43,10 @@ export class PaymentController {
       queryStatus || dto.status,
     );
   }
+  @Post('mock-success/:orderId')
+mockSuccess(
+  @Param('orderId', ParseIntPipe) orderId: number,
+) {
+  return this.paymentService.mockSuccess(orderId);
+}
 }

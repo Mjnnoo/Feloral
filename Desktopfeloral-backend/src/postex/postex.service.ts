@@ -513,9 +513,17 @@ export class PostexService {
     const order = await (this.prisma as any).order.findUnique({
       where: { id: orderId },
       include: {
-        items: true,
-        postexQuote: { include: { origin: true } },
-      },
+  items: {
+    include: {
+      variant: true,
+    },
+  },
+  postexQuote: {
+    include: {
+      origin: true,
+    },
+  },
+},
     });
     if (!order) throw new NotFoundException('سفارش پیدا نشد');
     if (
@@ -533,6 +541,11 @@ export class PostexService {
     }
 
     const payload = this.buildShipmentPayload(order);
+    
+    console.log(
+  'POSTEX SHIPMENT PAYLOAD:',
+  JSON.stringify(payload, null, 2),
+);
 
     try {
       const response = await this.client.createShipment(
@@ -862,13 +875,19 @@ export class PostexService {
     custom_channel: 'api',
 
     parcels: [
-      {
+  {
+    courier: {
+  name: quote.courierCode, 
+  service_type: quote.serviceType,
+  payment_type: 'SENDER',
+},
+
         from: {
           contact: {
             first_name: 'Feloral',
             last_name: 'Store',
-            mobile_no:
-              quote.origin.senderMobile,
+            mobile_no: quote.origin.senderMobile,
+telephone_no: quote.origin.senderMobile,
           },
 
           location: {
@@ -893,10 +912,9 @@ export class PostexService {
             first_name:
               order.shippingReceiverName,
 
-            last_name: '',
-
-            mobile_no:
-              order.shippingReceiverMobile,
+            last_name: 'Customer',
+mobile_no: order.shippingReceiverMobile,
+telephone_no: order.shippingReceiverMobile,
           },
 
           location: {
@@ -917,27 +935,15 @@ export class PostexService {
         },
 
 
-        parcel_items: order.items.map(
-          (item: any) => ({
-            description:
-              item.productName,
-
-            product_id:
-              item.productId,
-
-            quantity:
-              item.quantity,
-
-            sku:
-              item.sku,
-
-            price:
-              Number(item.price),
-
-            weight:
-              item.weight || 0,
-          }),
-        ),
+        parcel_items: order.items.map((item) => ({
+  description: item.productName,
+  product_id: item.productId,
+  properties: {},
+  quantity: item.quantity,
+  sku: item.sku,
+  price: Number(item.price),
+  weight: item.variant?.weightGram ?? 0,
+})),
 
 
         parcel_properties: {
@@ -954,7 +960,7 @@ export class PostexService {
             quote.totalWeightGram,
 
           is_fragile:
-            true,
+            false,
 
           is_liquid:
             false,
@@ -973,8 +979,7 @@ export class PostexService {
         },
 
 
-        custom_order_no:
-          `feloral-order-${order.id}`,
+        custom_order_no: String(order.id),
 
         ready_to_accept:
           true,

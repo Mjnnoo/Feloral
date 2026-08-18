@@ -13,8 +13,8 @@
     "incremental": true,
     "skipLibCheck": true,
     "strict": false,
-    "noImplicitAny": false
-  },
+    "noImplicitAny": false,
+          },
   "include": ["src/**/*.ts"],
   "exclude": [
     "node_modules",

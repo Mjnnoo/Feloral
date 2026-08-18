@@ -167,6 +167,7 @@ export class PostexClient {
     this.assertEnabled();
 
     try {
+      
       const response = await axios.request({
         method,
         url: `${this.baseUrl()}${path}`,
@@ -182,7 +183,7 @@ export class PostexClient {
       });
 
       return response.data;
-    } catch (error) {
+        } catch (error) {
       if (
         retryAuth &&
         axios.isAxiosError(error) &&
@@ -192,6 +193,22 @@ export class PostexClient {
         this.tokenCache = undefined;
         return this.request(method, path, options, false);
       }
+
+
+      console.log(
+        'POSTEX REAL ERROR:',
+        JSON.stringify(
+          {
+            status: error.response?.status,
+            data: error.response?.data,
+            headers: error.response?.headers,
+            sentBody: error.config?.data,
+          },
+          null,
+          2,
+        ),
+      );
+
 
       throw new BadGatewayException(this.extractError(error));
     }
@@ -300,5 +317,5 @@ export class PostexClient {
       ? error.message
       : 'ارتباط با Postex ناموفق بود';
   }
-  
+
 }

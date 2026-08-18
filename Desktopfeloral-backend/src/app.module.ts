@@ -26,6 +26,9 @@ import { InvoicesModule } from './invoices/invoices.module';
 import { PostexModule } from './postex/postex.module';
 import { ConfigModule } from '@nestjs/config';
 import { validateEnvironment } from './config/env.validation';
+import { VirtualTryOnModule } from './virtual-try-on/virtual-try-on.module';
+import { StorageModule } from './storage/storage.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -61,6 +64,9 @@ import { validateEnvironment } from './config/env.validation';
     InvoicesModule,
     PostexModule,
     CmsModule,
+    VirtualTryOnModule,
+    StorageModule,
+    AiModule,
   ],
 })
 export class AppModule {}

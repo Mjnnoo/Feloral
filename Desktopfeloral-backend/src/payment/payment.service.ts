@@ -347,4 +347,26 @@ export class PaymentService {
   private asJson(value: unknown): Prisma.InputJsonValue {
     return JSON.parse(JSON.stringify(value ?? {})) as Prisma.InputJsonValue;
   }
+  async mockSuccess(orderId: number) {
+  const finalized =
+    await this.orderService.finalizePaidOrder(orderId, {
+      authority: 'MOCK_AUTHORITY',
+      refId: 'MOCK_REF',
+      cardPan: 'MOCK_CARD',
+    });
+
+  try {
+    await this.postexService.ensureShipmentForPaidOrder(orderId);
+  } catch (error) {
+    console.error(
+      'Postex shipment creation failed after mock payment',
+      error,
+    );
+  }
+
+  return {
+    success: true,
+    order: finalized.order,
+  };
+}
 }
