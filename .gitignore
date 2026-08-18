@@ -46,3 +46,24 @@ Thumbs.db
 
 # Standalone AI Engine repository
 /ai-engine/
+
+
+
+Add-Content .gitignore @"
+
+# Local/manual backups
+*.bak
+*.backup
+*.backup.*
+*.backup-*
+*.patch
+**/_backup*/
+**/_backup_*/
+**/_feloral_backups/
+database-backups/
+feloral-frontend-backups/
+frontend-backup-*/
+frontend-persian-backup-*/
+"@
+
+git add .gitignore
