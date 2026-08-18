@@ -40,3 +40,9 @@ pnpm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# TypeScript incremental build metadata
+*.tsbuildinfo
+
+# Standalone AI Engine repository
+/ai-engine/
